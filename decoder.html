@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LSB Image Steganography Decoder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="decoder.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header-title">
+        <h1>LSB Image Steganography Decoder</h1>
+        <p>Load an image, tune decoding parameters, and inspect hidden data.</p>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="panel panel-left">
+        <h2>Image</h2>
+
+        <div class="upload-area" id="dropZone">
+          <input
+            id="fileInput"
+            type="file"
+            accept="image/*"
+            class="file-input"
+          />
+          <p class="upload-text">
+            Click to choose an image or drag &amp; drop it here
+          </p>
+        </div>
+
+        <div class="image-preview-container">
+          <h3>Preview</h3>
+          <div class="image-preview">
+            <img id="imagePreview" alt="Preview" />
+          </div>
+        </div>
+
+        <div class="metadata-container">
+          <h3>Metadata</h3>
+          <dl id="metadataList" class="metadata-list"></dl>
+        </div>
+      </section>
+
+      <section class="panel panel-right">
+        <h2>Decoder</h2>
+
+        <form id="decoderForm" class="decoder-form">
+          <div class="form-row">
+            <label for="bitsPerChannel">Bits per channel</label>
+            <input
+              id="bitsPerChannel"
+              type="number"
+              min="1"
+              max="8"
+              step="1"
+              value="1"
+            />
+          </div>
+
+          <div class="form-row">
+            <span class="label">Channels</span>
+            <div class="checkbox-group">
+              <label>
+                <input id="channelR" type="checkbox" checked />
+                R
+              </label>
+              <label>
+                <input id="channelG" type="checkbox" checked />
+                G
+              </label>
+              <label>
+                <input id="channelB" type="checkbox" checked />
+                B
+              </label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <span class="label">Pixel order</span>
+            <div class="radio-group">
+              <label>
+                <input
+                  type="radio"
+                  name="pixelOrder"
+                  value="row"
+                  checked
+                />
+                Left to right (rows)
+              </label>
+              <label>
+                <input type="radio" name="pixelOrder" value="column" />
+                Top to bottom (columns)
+              </label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <span class="label">Encoding</span>
+            <div class="radio-group">
+              <label>
+                <input
+                  type="radio"
+                  name="encoding"
+                  value="utf8"
+                  checked
+                />
+                UTF-8
+              </label>
+              <label>
+                <input type="radio" name="encoding" value="ascii" />
+                ASCII
+              </label>
+            </div>
+          </div>
+
+          <div class="form-row form-actions">
+            <button id="decodeButton" type="button">Decode</button>
+            <span id="statusLabel" class="status-label"></span>
+          </div>
+        </form>
+
+        <section class="results-section">
+          <div class="results-header">
+            <h3>Decoded text</h3>
+            <button id="copyTextButton" type="button">Copy text</button>
+          </div>
+          <textarea
+            id="textOutput"
+            class="results-text"
+            readonly
+            spellcheck="false"
+          ></textarea>
+        </section>
+
+        <section class="results-section">
+          <div class="results-header">
+            <h3>Hex view</h3>
+            <button id="copyHexButton" type="button">Copy hex</button>
+          </div>
+          <pre id="hexOutput" class="results-hex"></pre>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="decoder.js"></script>
+  </body>
+  </html>
+
+

@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "LSB Image Steganography Decoder",
+  "version": "0.1.0",
+  "description": "Decode hidden messages from images using configurable LSB steganography parameters.",
+  "action": {
+    "default_title": "Open LSB Decoder"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage"
+  ]
+}
+
+
