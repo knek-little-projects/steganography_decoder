@@ -17,6 +17,7 @@ const encodeChannelGInput = document.getElementById('encodeChannelG');
 const encodeChannelBInput = document.getElementById('encodeChannelB');
 const encodeEncodingRadios = document.querySelectorAll('input[name="encodeEncoding"]');
 const encodePixelOrderRadios = document.querySelectorAll('input[name="encodePixelOrder"]');
+const fillWithZerosInput = document.getElementById('fillWithZeros');
 
 function getSelectedEncodeEncoding() {
   const checked = Array.from(encodeEncodingRadios).find((r) => r.checked);
@@ -101,6 +102,7 @@ if (encodeButton) {
       useB: encodeChannelBInput.checked,
       pixelOrder: getSelectedEncodePixelOrder(),
       encoding: getSelectedEncodeEncoding(),
+      fillWithZeros: fillWithZerosInput ? fillWithZerosInput.checked : false,
     };
 
     if (!config.useR && !config.useG && !config.useB) {

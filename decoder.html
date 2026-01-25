@@ -125,8 +125,17 @@
           </div>
 
           <div class="form-row form-actions">
-            <button id="decodeButton" type="button">Decode</button>
+            <div class="button-group">
+              <button id="decodeButton" type="button">Decode</button>
+              <button id="autoDetectButton" type="button" class="button-secondary">Auto-detect Parameters</button>
+            </div>
             <span id="statusLabel" class="status-label"></span>
+          </div>
+          <div id="progressContainer" class="progress-container" style="display: none;">
+            <div class="progress-bar">
+              <div id="progressBar" class="progress-bar-fill"></div>
+            </div>
+            <span id="progressText" class="progress-text">0%</span>
           </div>
         </form>
 
@@ -237,6 +246,13 @@
                 ASCII
               </label>
             </div>
+          </div>
+
+          <div class="form-row">
+            <label>
+              <input id="fillWithZeros" type="checkbox" />
+              Fill remaining capacity with zeros
+            </label>
           </div>
 
           <div class="form-row form-actions">

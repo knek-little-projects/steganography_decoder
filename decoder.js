@@ -1,6 +1,7 @@
 import { setImageForEncode } from './encoder.js';
 
-import { decodeLSB } from './lsb.js';
+import { decodeLSB, formatBytesAsAscii, formatBytesAsUtf8, formatBytesAsHex } from './lsb.js';
+import { autoDetectParametersByMaxLength } from './autoDetect.js';
 
 const fileInput = document.getElementById('fileInput');
 const dropZone = document.getElementById('dropZone');
@@ -12,7 +13,11 @@ const channelRInput = document.getElementById('channelR');
 const channelGInput = document.getElementById('channelG');
 const channelBInput = document.getElementById('channelB');
 const decodeButton = document.getElementById('decodeButton');
+const autoDetectButton = document.getElementById('autoDetectButton');
 const statusLabel = document.getElementById('statusLabel');
+const progressContainer = document.getElementById('progressContainer');
+const progressBar = document.getElementById('progressBar');
+const progressText = document.getElementById('progressText');
 
 const textOutput = document.getElementById('textOutput');
 const hexOutput = document.getElementById('hexOutput');
@@ -182,12 +187,17 @@ function handleDecodeClick() {
       useG,
       useB,
       order,
-      encoding,
     });
     const t1 = performance.now();
 
-    textOutput.value = result.text;
-    hexOutput.textContent = result.hex;
+    // Format bytes for display based on encoding
+    const formattedText = encoding === 'ascii'
+      ? formatBytesAsAscii(result.bytes, result.hasTail, result.tailBits || 0)
+      : formatBytesAsUtf8(result.bytes, result.hasTail, result.tailBits || 0);
+    const formattedHex = formatBytesAsHex(result.bytes);
+
+    textOutput.value = formattedText;
+    hexOutput.textContent = formattedHex;
 
     const bitsUsed =
       currentImageData.width *
@@ -205,6 +215,91 @@ function handleDecodeClick() {
   } catch (e) {
     console.error('Decode error', e);
     setStatus('Decode failed. See console for details.', true);
+  }
+}
+
+async function handleAutoDetectClick() {
+  setStatus('');
+  clearOutputs();
+
+  if (!currentImageData) {
+    setStatus('Load an image first.', true);
+    return;
+  }
+
+  setStatus('Detecting parameters...');
+  autoDetectButton.disabled = true;
+  decodeButton.disabled = true;
+  progressContainer.style.display = 'flex';
+  progressBar.style.width = '0%';
+  progressText.textContent = '0%';
+
+  try {
+    const t0 = performance.now();
+    const detection = await autoDetectParametersByMaxLength(currentImageData, {
+      bitsPerChannel: [1, 2, 3, 4],
+      quickMode: false,
+      onProgress: (current, total, percentage) => {
+        progressBar.style.width = `${percentage}%`;
+        progressText.textContent = `${percentage}%`;
+      },
+    });
+    const t1 = performance.now();
+
+    // Hide progress bar
+    progressContainer.style.display = 'none';
+
+    if (!detection.params || !detection.result) {
+      setStatus('Could not detect parameters. Try manual decoding.', true);
+      return;
+    }
+
+    // Apply detected parameters to form
+    const { bitsPerChannel, useR, useG, useB, order, encoding } = detection.params;
+    
+    bitsPerChannelInput.value = String(bitsPerChannel);
+    channelRInput.checked = useR;
+    channelGInput.checked = useG;
+    channelBInput.checked = useB;
+    
+    // Set pixel order
+    for (const radio of pixelOrderRadios) {
+      radio.checked = radio.value === order;
+    }
+    
+    // Set encoding
+    for (const radio of encodingRadios) {
+      radio.checked = radio.value === encoding;
+    }
+    
+    ensureAtLeastOneChannel();
+    persistSettings();
+
+    // Display decoded result
+    const formattedHex = formatBytesAsHex(detection.result.bytes);
+    // Format with tailBits for proper display
+    const formattedText = detection.params.encoding === 'ascii'
+      ? formatBytesAsAscii(detection.result.bytes, detection.result.hasTail, detection.result.tailBits || 0)
+      : formatBytesAsUtf8(detection.result.bytes, detection.result.hasTail, detection.result.tailBits || 0);
+    textOutput.value = formattedText;
+    hexOutput.textContent = formattedHex;
+
+    const summary = [
+      `Detected: ${bitsPerChannel} bit(s)/channel`,
+      `${detection.params.useR ? 'R' : ''}${detection.params.useG ? 'G' : ''}${detection.params.useB ? 'B' : ''}`,
+      `order: ${order}`,
+      `encoding: ${encoding.toUpperCase()}`,
+      `max length: ${detection.maxPrintableLength} bytes`,
+      `~${(t1 - t0).toFixed(1)} ms`,
+    ];
+    setStatus(summary.join(' · '), false);
+  } catch (e) {
+    console.error('Auto-detect error', e);
+    setStatus('Auto-detection failed. See console for details.', true);
+    progressContainer.style.display = 'none';
+  } finally {
+    autoDetectButton.disabled = false;
+    decodeButton.disabled = false;
   }
 }
 
@@ -357,6 +452,7 @@ function init() {
   dropZone.addEventListener('drop', handleDrop);
 
   decodeButton.addEventListener('click', handleDecodeClick);
+  autoDetectButton.addEventListener('click', handleAutoDetectClick);
   bitsPerChannelInput.addEventListener('blur', onBitsPerChannelBlur);
 
   channelRInput.addEventListener('change', () => {

@@ -20,7 +20,7 @@
  * @throws {Error} If message is too long or encoding is invalid
  */
 export function encodeLSB(imageData, message, config) {
-  const { bitsPerChannel, useR, useG, useB, pixelOrder, encoding } = config;
+  const { bitsPerChannel, useR, useG, useB, pixelOrder, encoding, fillWithZeros = false } = config;
   
   // Validate bitsPerChannel
   if (bitsPerChannel < 1 || bitsPerChannel > 8) {
@@ -62,12 +62,20 @@ export function encodeLSB(imageData, message, config) {
   
   // Calculate capacity
   const channels = [useR, useG, useB].filter(Boolean).length;
-  const totalBitsNeeded = bits.length;
+  const messageBitsCount = bits.length; // Save original message bits count
   const bitsPerPixel = channels * bitsPerChannel;
-  const pixelsNeeded = Math.ceil(totalBitsNeeded / bitsPerPixel);
+  const totalCapacity = imageData.width * imageData.height * bitsPerPixel;
   
-  if (pixelsNeeded > imageData.width * imageData.height) {
-    throw new Error(`Message is too long for this image. Need ${pixelsNeeded} pixels, but image has ${imageData.width * imageData.height} pixels.`);
+  if (messageBitsCount > totalCapacity) {
+    throw new Error(`Message is too long for this image. Need ${messageBitsCount} bits, but image has capacity of ${totalCapacity} bits.`);
+  }
+  
+  // If fillWithZeros is enabled, fill remaining capacity with zeros
+  if (fillWithZeros) {
+    const remainingBits = totalCapacity - messageBitsCount;
+    for (let i = 0; i < remainingBits; i++) {
+      bits.push(0);
+    }
   }
 
   const data = new Uint8ClampedArray(imageData.data);
@@ -95,7 +103,6 @@ export function encodeLSB(imageData, message, config) {
   if (pixelOrder === 'row') {
     for (let y = 0; y < imageData.height; y++) {
       for (let x = 0; x < imageData.width; x++) {
-        if (bitIndex >= bits.length) break;
         const idx = (y * imageData.width + x) * 4;
         
         if (useR) {
@@ -107,13 +114,15 @@ export function encodeLSB(imageData, message, config) {
         if (useB) {
           data[idx + 2] = writeChannelBits(data[idx + 2]);
         }
+        
+        // If fillWithZeros is false, stop when message bits are exhausted
+        if (!fillWithZeros && bitIndex >= messageBitsCount) break;
       }
-      if (bitIndex >= bits.length) break;
+      if (!fillWithZeros && bitIndex >= messageBitsCount) break;
     }
   } else if (pixelOrder === 'column') {
     for (let x = 0; x < imageData.width; x++) {
       for (let y = 0; y < imageData.height; y++) {
-        if (bitIndex >= bits.length) break;
         const idx = (y * imageData.width + x) * 4;
         
         if (useR) {
@@ -125,8 +134,11 @@ export function encodeLSB(imageData, message, config) {
         if (useB) {
           data[idx + 2] = writeChannelBits(data[idx + 2]);
         }
+        
+        // If fillWithZeros is false, stop when message bits are exhausted
+        if (!fillWithZeros && bitIndex >= messageBitsCount) break;
       }
-      if (bitIndex >= bits.length) break;
+      if (!fillWithZeros && bitIndex >= messageBitsCount) break;
     }
   } else {
     throw new Error(`Unsupported pixelOrder: ${pixelOrder}`);
@@ -137,6 +149,7 @@ export function encodeLSB(imageData, message, config) {
 
 /**
  * Decodes a message from image pixel data using LSB steganography.
+ * Returns raw bytes without any text formatting.
  * 
  * @param {ImageData} imageData - The image data to decode from
  * @param {Object} options - Decoding options
@@ -145,11 +158,10 @@ export function encodeLSB(imageData, message, config) {
  * @param {boolean} options.useG - Whether to use the green channel
  * @param {boolean} options.useB - Whether to use the blue channel
  * @param {string} options.order - Pixel traversal order: 'row' or 'column'
- * @param {string} options.encoding - Text encoding: 'utf8' or 'ascii'
- * @returns {Object} Decoded result with text, hex, byteCount, and hasTail
+ * @returns {Object} Decoded result with bytes (Uint8Array), byteCount, hasTail, and tailBits
  */
 export function decodeLSB(imageData, options) {
-  const { bitsPerChannel, useR, useG, useB, order, encoding } = options;
+  const { bitsPerChannel, useR, useG, useB, order } = options;
 
   const width = imageData.width;
   const height = imageData.height;
@@ -199,28 +211,32 @@ export function decodeLSB(imageData, options) {
   }
 
   const hasTail = bitPos !== 0;
-  const text =
-    encoding === 'ascii'
-      ? bytesToAscii(bytes, hasTail)
-      : bytesToUtf8String(bytes, hasTail);
-  const hex = formatBytesAsHex(bytes);
+  
+  // Store tail bits if there's a tail
+  let tailBits = 0;
+  if (hasTail) {
+    tailBits = currentByte;
+  }
 
   return {
-    text,
-    hex,
+    bytes: new Uint8Array(bytes),
     byteCount: bytes.length,
     hasTail,
+    tailBits, // Bits in the incomplete last byte (0-7 bits)
   };
 }
 
 /**
- * Helper function to format bytes as hexadecimal string.
+ * Formats bytes as hexadecimal string for display.
+ * 
+ * @param {Uint8Array|Array} bytes - Bytes to format
+ * @returns {string} Hexadecimal string representation
  */
-function formatBytesAsHex(bytes) {
-  if (!bytes.length) return '';
+export function formatBytesAsHex(bytes) {
+  if (!bytes || bytes.length === 0) return '';
   const lines = [];
   for (let i = 0; i < bytes.length; i += 16) {
-    const chunk = bytes.slice(i, i + 16);
+    const chunk = Array.from(bytes.slice(i, i + 16));
     const line = chunk.map((b) => b.toString(16).padStart(2, '0')).join(' ');
     lines.push(line);
   }
@@ -232,26 +248,6 @@ function formatBytesAsHex(bytes) {
  */
 function isPrintableAscii(byte) {
   return byte >= 0x20 && byte <= 0x7e;
-}
-
-/**
- * Helper function to convert bytes to ASCII string.
- */
-function bytesToAscii(bytes, hasTail) {
-  let result = '';
-  for (const b of bytes) {
-    if (isPrintableAscii(b)) {
-      result += String.fromCharCode(b);
-    } else if (b === 0x0a || b === 0x0d || b === 0x09) {
-      result += String.fromCharCode(b);
-    } else {
-      result += '.';
-    }
-  }
-  if (hasTail) {
-    result += '_';
-  }
-  return result;
 }
 
 /**
@@ -268,27 +264,137 @@ function isControlCharacter(ch) {
 }
 
 /**
- * Helper function to convert bytes to UTF-8 string.
+ * Converts bytes to ASCII string for display, replacing non-printable characters.
+ * Non-printable bytes are replaced with '.' and a tail indicator is added as '_' if hasTail is true.
+ * Zero bytes (0x00) are displayed as empty string.
+ * 
+ * @param {Uint8Array|Array} bytes - Bytes to convert
+ * @param {boolean} hasTail - Whether there are incomplete bits at the end
+ * @param {number} tailBits - Bits in the incomplete last byte (0-7), if hasTail is true
+ * @returns {string} Formatted ASCII string with replacements
  */
-function bytesToUtf8String(bytes, hasTail) {
-  if (!bytes.length) {
-    return hasTail ? '_' : '';
+export function formatBytesAsAscii(bytes, hasTail = false, tailBits = 0) {
+  if (!bytes || bytes.length === 0) {
+    // If hasTail and tailBits is 0, don't show '_'
+    return (hasTail && tailBits !== 0) ? '_' : '';
   }
-  const decoder = new TextDecoder('utf-8', { fatal: false });
-  const decoded = decoder.decode(new Uint8Array(bytes));
   let result = '';
-  for (const ch of decoded) {
-    if (ch === '\ufffd') {
-      result += '_';
-    } else if (isControlCharacter(ch)) {
-      result += '.';
+  for (const b of bytes) {
+    if (b === 0x00) {
+      // Zero bytes are displayed as empty string
+      result += '';
+    } else if (isPrintableAscii(b)) {
+      result += String.fromCharCode(b);
+    } else if (b === 0x0a || b === 0x0d || b === 0x09) {
+      result += String.fromCharCode(b);
     } else {
-      result += ch;
+      result += '.';
     }
   }
-  if (hasTail) {
+  
+  // Check if tail is all zeros - if so, don't show '_'
+  if (hasTail && tailBits !== 0) {
     result += '_';
   }
   return result;
+}
+
+/**
+ * Converts bytes to UTF-8 string for display, replacing non-printable characters.
+ * Invalid UTF-8 sequences are replaced with '_' and control characters with '.'.
+ * Zero bytes (0x00) are displayed as empty string.
+ * A tail indicator is added as '_' if hasTail is true and tail is not all zeros.
+ * 
+ * @param {Uint8Array|Array} bytes - Bytes to convert
+ * @param {boolean} hasTail - Whether there are incomplete bits at the end
+ * @param {number} tailBits - Bits in the incomplete last byte (0-7), if hasTail is true
+ * @returns {string} Formatted UTF-8 string with replacements
+ */
+export function formatBytesAsUtf8(bytes, hasTail = false, tailBits = 0) {
+  if (!bytes || bytes.length === 0) {
+    // If hasTail and tailBits is 0, don't show '_'
+    return (hasTail && tailBits !== 0) ? '_' : '';
+  }
+  
+  // Process bytes, replacing zero bytes with empty strings
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  let result = '';
+  let i = 0;
+  
+  while (i < bytes.length) {
+    if (bytes[i] === 0x00) {
+      // Zero bytes are displayed as empty string
+      result += '';
+      i++;
+    } else {
+      // Try to decode UTF-8 sequence starting from this byte
+      // Find the end of potential UTF-8 sequence (or next zero byte)
+      let seqEnd = i + 1;
+      while (seqEnd < bytes.length && bytes[seqEnd] !== 0x00) {
+        // Check if this could be a continuation byte
+        if ((bytes[seqEnd] & 0xC0) === 0x80) {
+          seqEnd++;
+        } else {
+          // Start of new sequence
+          break;
+        }
+      }
+      
+      // Decode the sequence
+      const sequence = bytes.slice(i, seqEnd);
+      const decoded = decoder.decode(new Uint8Array(sequence));
+      
+      for (const ch of decoded) {
+        if (ch === '\ufffd') {
+          result += '_';
+        } else if (isControlCharacter(ch)) {
+          result += '.';
+        } else {
+          result += ch;
+        }
+      }
+      
+      i = seqEnd;
+    }
+  }
+  
+  // Check if tail is all zeros - if so, don't show '_'
+  if (hasTail && tailBits !== 0) {
+    result += '_';
+  }
+  return result;
+}
+
+/**
+ * Calculates Shannon entropy of a string.
+ * Entropy measures the average information content per symbol.
+ * Higher entropy indicates more randomness/diversity in the data.
+ * 
+ * @param {string} str - The string to calculate entropy for
+ * @returns {number} Entropy value in bits (0 to log2(alphabet_size))
+ */
+export function calculateEntropy(str) {
+  if (!str || str.length === 0) {
+    return 0;
+  }
+  
+  // Count frequency of each character
+  const freq = {};
+  for (const char of str) {
+    freq[char] = (freq[char] || 0) + 1;
+  }
+  
+  // Calculate entropy: H(X) = -Σ p(x) * log2(p(x))
+  let entropy = 0;
+  const len = str.length;
+  
+  for (const char in freq) {
+    const probability = freq[char] / len;
+    if (probability > 0) {
+      entropy -= probability * Math.log2(probability);
+    }
+  }
+  
+  return entropy;
 }
 

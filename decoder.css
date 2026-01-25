@@ -365,6 +365,43 @@ button:disabled {
   transform: none;
 }
 
+.button-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.progress-container {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #22c55e);
+  width: 0%;
+  transition: width 0.1s ease;
+  border-radius: 3px;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 35px;
+  text-align: right;
+}
+
 .status-label {
   font-size: 12px;
   color: var(--text-muted);
