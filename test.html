@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LSB Steganography Tests</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      h1 {
+        color: #333;
+      }
+      button {
+        background: #4CAF50;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 10px 0;
+      }
+      button:hover {
+        background: #45a049;
+      }
+      #output {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 20px;
+        margin-top: 20px;
+        font-family: 'Courier New', monospace;
+        white-space: pre-wrap;
+        max-height: 600px;
+        overflow-y: auto;
+      }
+      .pass {
+        color: #4CAF50;
+      }
+      .fail {
+        color: #f44336;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LSB Steganography Library Tests</h1>
+    <button onclick="runTests()">Run Tests</button>
+    <div id="output"></div>
+
+    <script type="module">
+      import { runLSBTests } from './lsb.test.js';
+      
+      window.runTests = async () => {
+        const output = document.getElementById('output');
+        output.textContent = '';
+        
+        // Override console.log to capture output
+        const originalLog = console.log;
+        const originalError = console.error;
+        const logs = [];
+        
+        console.log = (...args) => {
+          logs.push({ type: 'log', args });
+          originalLog(...args);
+        };
+        
+        console.error = (...args) => {
+          logs.push({ type: 'error', args });
+          originalError(...args);
+        };
+        
+        try {
+          const passed = await runLSBTests();
+          
+          // Restore console
+          console.log = originalLog;
+          console.error = originalError;
+          
+          // Display results
+          output.innerHTML = logs.map(({ type, args }) => {
+            const text = args.join(' ');
+            const className = type === 'error' ? 'fail' : text.startsWith('✓') ? 'pass' : text.startsWith('✗') ? 'fail' : '';
+            return `<div class="${className}">${text}</div>`;
+          }).join('');
+          
+          if (passed) {
+            output.innerHTML += '<div class="pass"><strong>All tests passed!</strong></div>';
+          } else {
+            output.innerHTML += '<div class="fail"><strong>Some tests failed!</strong></div>';
+          }
+        } catch (error) {
+          console.log = originalLog;
+          console.error = originalError;
+          output.textContent = `Error running tests: ${error.message}\n${error.stack}`;
+        }
+      };
+    </script>
+  </body>
+</html>
+

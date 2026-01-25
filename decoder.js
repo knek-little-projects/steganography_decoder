@@ -1,3 +1,7 @@
+import { setImageForEncode } from './encoder.js';
+
+import { decodeLSB } from './lsb.js';
+
 const fileInput = document.getElementById('fileInput');
 const dropZone = document.getElementById('dropZone');
 const imagePreview = document.getElementById('imagePreview');
@@ -87,134 +91,7 @@ function onBitsPerChannelBlur() {
   bitsPerChannelInput.value = String(value);
 }
 
-function formatBytesAsHex(bytes) {
-  if (!bytes.length) return '';
-  const lines = [];
-  for (let i = 0; i < bytes.length; i += 16) {
-    const chunk = bytes.slice(i, i + 16);
-    const line = chunk.map((b) => b.toString(16).padStart(2, '0')).join(' ');
-    lines.push(line);
-  }
-  return lines.join('\n');
-}
-
-function isPrintableAscii(byte) {
-  return byte >= 0x20 && byte <= 0x7e;
-}
-
-function bytesToAscii(bytes, hasTail) {
-  let result = '';
-  for (const b of bytes) {
-    if (isPrintableAscii(b)) {
-      result += String.fromCharCode(b);
-    } else if (b === 0x0a || b === 0x0d || b === 0x09) {
-      result += String.fromCharCode(b);
-    } else {
-      result += '.';
-    }
-  }
-  if (hasTail) {
-    result += '_';
-  }
-  return result;
-}
-
-function isControlCharacter(ch) {
-  if (!ch || ch.length === 0) return false;
-  const code = ch.codePointAt(0);
-  if (code === undefined) return false;
-  if (code === 0x0a || code === 0x0d || code === 0x09) {
-    return false;
-  }
-  return code < 0x20 || (code >= 0x7f && code < 0xa0);
-}
-
-function bytesToUtf8String(bytes, hasTail) {
-  if (!bytes.length) {
-    return hasTail ? '_' : '';
-  }
-  const decoder = new TextDecoder('utf-8', { fatal: false });
-  const decoded = decoder.decode(new Uint8Array(bytes));
-  let result = '';
-  for (const ch of decoded) {
-    if (ch === '\ufffd') {
-      result += '_';
-    } else if (isControlCharacter(ch)) {
-      result += '.';
-    } else {
-      result += ch;
-    }
-  }
-  if (hasTail) {
-    result += '_';
-  }
-  return result;
-}
-
-function decodeImageData(imageData, options) {
-  const { bitsPerChannel, useR, useG, useB, order, encoding } = options;
-
-  const width = imageData.width;
-  const height = imageData.height;
-  const data = imageData.data;
-
-  const mask = (1 << bitsPerChannel) - 1;
-  const bytes = [];
-  let currentByte = 0;
-  let bitPos = 0;
-
-  function pushBit(bit) {
-    currentByte |= (bit & 1) << bitPos;
-    bitPos += 1;
-    if (bitPos === 8) {
-      bytes.push(currentByte);
-      currentByte = 0;
-      bitPos = 0;
-    }
-  }
-
-  function extractChannelBits(value) {
-    const channelBits = value & mask;
-    for (let i = 0; i < bitsPerChannel; i += 1) {
-      const bit = (channelBits >> i) & 1;
-      pushBit(bit);
-    }
-  }
-
-  if (order === 'column') {
-    for (let x = 0; x < width; x += 1) {
-      for (let y = 0; y < height; y += 1) {
-        const idx = (y * width + x) * 4;
-        if (useR) extractChannelBits(data[idx]);
-        if (useG) extractChannelBits(data[idx + 1]);
-        if (useB) extractChannelBits(data[idx + 2]);
-      }
-    }
-  } else {
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const idx = (y * width + x) * 4;
-        if (useR) extractChannelBits(data[idx]);
-        if (useG) extractChannelBits(data[idx + 1]);
-        if (useB) extractChannelBits(data[idx + 2]);
-      }
-    }
-  }
-
-  const hasTail = bitPos !== 0;
-  const text =
-    encoding === 'ascii'
-      ? bytesToAscii(bytes, hasTail)
-      : bytesToUtf8String(bytes, hasTail);
-  const hex = formatBytesAsHex(bytes);
-
-  return {
-    text,
-    hex,
-    byteCount: bytes.length,
-    hasTail,
-  };
-}
+// decodeImageData is now imported from lsb.js as decodeLSB
 
 function readSettingsFromForm() {
   const bits = parseInt(bitsPerChannelInput.value, 10);
@@ -299,7 +176,7 @@ function handleDecodeClick() {
 
   try {
     const t0 = performance.now();
-    const result = decodeImageData(currentImageData, {
+    const result = decodeLSB(currentImageData, {
       bitsPerChannel,
       useR,
       useG,
@@ -357,6 +234,10 @@ function handleFile(file) {
         imagePreview.src = url;
         imagePreview.style.display = 'block';
         updateMetadata(file, currentImageData);
+        // Notify encoder about new image
+        if (typeof setImageForEncode === 'function') {
+          setImageForEncode(currentImageData);
+        }
         setStatus('Image loaded. Ready to decode.');
       } catch (e) {
         console.error('Canvas decode error', e);
@@ -441,9 +322,33 @@ async function copyToClipboard(text) {
   }
 }
 
+function initTabs() {
+  const tabButtons = document.querySelectorAll('.tab-button');
+  const decodePanel = document.getElementById('decodePanel');
+  const encodePanel = document.getElementById('encodePanel');
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      
+      tabButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      if (tab === 'decode') {
+        decodePanel.style.display = 'flex';
+        encodePanel.style.display = 'none';
+      } else {
+        decodePanel.style.display = 'none';
+        encodePanel.style.display = 'flex';
+      }
+    });
+  });
+}
+
 function init() {
   restoreSettings();
   ensureAtLeastOneChannel();
+  initTabs();
 
   fileInput.addEventListener('change', handleFileInputChange);
 
