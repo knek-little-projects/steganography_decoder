@@ -54,6 +54,7 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
     bitsPerChannel = [1, 2, 3, 4],
     quickMode = false,
     onProgress = null,
+    abortSignal = null,
   } = options;
 
   const possibleBits = quickMode ? [1, 2] : bitsPerChannel;
@@ -90,9 +91,29 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
   const MAX_BYTES_TO_ANALYZE = 1000;
   
   for (const bits of possibleBits) {
+    // Check if aborted at start of outer loop
+    if (abortSignal && abortSignal.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    }
+    
     for (const channels of channelCombinations) {
+      // Check if aborted at start of channel loop
+      if (abortSignal && abortSignal.aborted) {
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }
+      
       for (const order of orders) {
+        // Check if aborted at start of order loop
+        if (abortSignal && abortSignal.aborted) {
+          throw new DOMException('The operation was aborted.', 'AbortError');
+        }
+        
         for (const encoding of encodings) {
+          // Check if aborted at start of encoding loop
+          if (abortSignal && abortSignal.aborted) {
+            throw new DOMException('The operation was aborted.', 'AbortError');
+          }
+          
           currentCombination++;
           
           // Report progress
@@ -103,6 +124,11 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
             await new Promise(resolve => setTimeout(resolve, 0));
           }
           
+          // Check again after async operation
+          if (abortSignal && abortSignal.aborted) {
+            throw new DOMException('The operation was aborted.', 'AbortError');
+          }
+          
           try {
             const decoded = decodeLSB(imageData, {
               bitsPerChannel: bits,
@@ -110,16 +136,31 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               order,
             });
             
+            // Check after decodeLSB (which might be slow)
+            if (abortSignal && abortSignal.aborted) {
+              throw new DOMException('The operation was aborted.', 'AbortError');
+            }
+            
             // Only analyze first 1000 bytes for performance
             const bytesToAnalyze = decoded.bytes.slice(0, MAX_BYTES_TO_ANALYZE);
             
             // Calculate max printable length from raw bytes (first 1000 only)
             const maxPrintableLength = calculateMaxPrintableLength(bytesToAnalyze);
             
+            // Check after calculation
+            if (abortSignal && abortSignal.aborted) {
+              throw new DOMException('The operation was aborted.', 'AbortError');
+            }
+            
             // Format bytes to text (use full bytes for result, but only analyze first 1000)
             const formattedText = encoding === 'ascii'
               ? formatBytesAsAscii(decoded.bytes, decoded.hasTail, decoded.tailBits || 0)
               : formatBytesAsUtf8(decoded.bytes, decoded.hasTail, decoded.tailBits || 0);
+            
+            // Check after formatting
+            if (abortSignal && abortSignal.aborted) {
+              throw new DOMException('The operation was aborted.', 'AbortError');
+            }
             
             const result = {
               ...decoded,
@@ -139,7 +180,11 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               bestResult = result;
             }
           } catch (e) {
-            // Skip errors silently
+            // Re-throw abort errors
+            if (e.name === 'AbortError') {
+              throw e;
+            }
+            // Skip other errors silently
           }
         }
       }

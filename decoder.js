@@ -14,6 +14,7 @@ const channelGInput = document.getElementById('channelG');
 const channelBInput = document.getElementById('channelB');
 const decodeButton = document.getElementById('decodeButton');
 const autoDetectButton = document.getElementById('autoDetectButton');
+const stopAutoDetectButton = document.getElementById('stopAutoDetectButton');
 const statusLabel = document.getElementById('statusLabel');
 const progressContainer = document.getElementById('progressContainer');
 const progressBar = document.getElementById('progressBar');
@@ -29,6 +30,7 @@ const DISPLAY_BYTE_LIMIT = 1000; // Maximum bytes/characters to display initiall
 
 let fullDecodedText = ''; // Store full decoded text
 let fullDecodedHex = ''; // Store full decoded hex
+let autoDetectAbortController = null; // AbortController for stopping auto-detect
 
 const encodingRadios = document.querySelectorAll('input[name="encoding"]');
 const pixelOrderRadios = document.querySelectorAll('input[name="pixelOrder"]');
@@ -262,9 +264,13 @@ async function handleAutoDetectClick() {
   setStatus('Detecting parameters...');
   autoDetectButton.disabled = true;
   decodeButton.disabled = true;
+  stopAutoDetectButton.style.display = 'inline-flex';
   progressContainer.style.display = 'flex';
   progressBar.style.width = '0%';
   progressText.textContent = '0%';
+
+  // Create AbortController for cancellation
+  autoDetectAbortController = new AbortController();
 
   try {
     const t0 = performance.now();
@@ -272,14 +278,20 @@ async function handleAutoDetectClick() {
       bitsPerChannel: [1, 2, 3, 4],
       quickMode: false,
       onProgress: (current, total, percentage) => {
+        // Check if aborted during progress update
+        if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
+          return; // Stop updating if aborted
+        }
         progressBar.style.width = `${percentage}%`;
         progressText.textContent = `${percentage}%`;
       },
+      abortSignal: autoDetectAbortController.signal,
     });
     const t1 = performance.now();
 
-    // Hide progress bar
+    // Hide progress bar and stop button
     progressContainer.style.display = 'none';
+    stopAutoDetectButton.style.display = 'none';
 
     if (!detection.params || !detection.result) {
       setStatus('Could not detect parameters. Try manual decoding.', true);
@@ -345,12 +357,25 @@ async function handleAutoDetectClick() {
     ];
     setStatus(summary.join(' · '), false);
   } catch (e) {
-    console.error('Auto-detect error', e);
-    setStatus('Auto-detection failed. See console for details.', true);
+    if (e.name === 'AbortError') {
+      setStatus('Auto-detect stopped by user.', false);
+    } else {
+      console.error('Auto-detect error', e);
+      setStatus('Auto-detect failed. See console for details.', true);
+    }
     progressContainer.style.display = 'none';
+    stopAutoDetectButton.style.display = 'none';
+    autoDetectAbortController = null;
   } finally {
     autoDetectButton.disabled = false;
     decodeButton.disabled = false;
+  }
+}
+
+function handleStopAutoDetectClick() {
+  if (autoDetectAbortController) {
+    autoDetectAbortController.abort();
+    autoDetectAbortController = null;
   }
 }
 
@@ -504,6 +529,7 @@ function init() {
 
   decodeButton.addEventListener('click', handleDecodeClick);
   autoDetectButton.addEventListener('click', handleAutoDetectClick);
+  stopAutoDetectButton.addEventListener('click', handleStopAutoDetectClick);
   bitsPerChannelInput.addEventListener('blur', onBitsPerChannelBlur);
 
   channelRInput.addEventListener('change', () => {
