@@ -24,6 +24,12 @@ const hexOutput = document.getElementById('hexOutput');
 const copyTextButton = document.getElementById('copyTextButton');
 const copyHexButton = document.getElementById('copyHexButton');
 
+// Display limits
+const DISPLAY_BYTE_LIMIT = 1000; // Maximum bytes/characters to display initially
+
+let fullDecodedText = ''; // Store full decoded text
+let fullDecodedHex = ''; // Store full decoded hex
+
 const encodingRadios = document.querySelectorAll('input[name="encoding"]');
 const pixelOrderRadios = document.querySelectorAll('input[name="pixelOrder"]');
 
@@ -77,9 +83,17 @@ function updateMetadata(file, imageData) {
   }
 }
 
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 function clearOutputs() {
-  textOutput.value = '';
+  textOutput.textContent = '';
   hexOutput.textContent = '';
+  fullDecodedText = '';
+  fullDecodedHex = '';
 }
 
 function ensureAtLeastOneChannel() {
@@ -196,8 +210,26 @@ function handleDecodeClick() {
       : formatBytesAsUtf8(result.bytes, result.hasTail, result.tailBits || 0);
     const formattedHex = formatBytesAsHex(result.bytes);
 
-    textOutput.value = formattedText;
-    hexOutput.textContent = formattedHex;
+    // Store full text and hex
+    fullDecodedText = formattedText;
+    fullDecodedHex = formattedHex;
+    
+    // Display only first DISPLAY_BYTE_LIMIT characters with "show more" link
+    if (formattedText.length > DISPLAY_BYTE_LIMIT) {
+      const truncated = formattedText.substring(0, DISPLAY_BYTE_LIMIT);
+      textOutput.innerHTML = escapeHtml(truncated) + ' <a href="#" class="show-more-link">[show more...]</a>';
+    } else {
+      textOutput.textContent = formattedText;
+    }
+    
+    // Display only first DISPLAY_BYTE_LIMIT bytes in hex with "show more" link
+    if (result.bytes.length > DISPLAY_BYTE_LIMIT) {
+      const truncatedBytes = result.bytes.slice(0, DISPLAY_BYTE_LIMIT);
+      const truncatedHex = formatBytesAsHex(truncatedBytes);
+      hexOutput.innerHTML = escapeHtml(truncatedHex) + ' <a href="#" class="show-more-link">[show more...]</a>';
+    } else {
+      hexOutput.textContent = formattedHex;
+    }
 
     const bitsUsed =
       currentImageData.width *
@@ -281,8 +313,27 @@ async function handleAutoDetectClick() {
     const formattedText = detection.params.encoding === 'ascii'
       ? formatBytesAsAscii(detection.result.bytes, detection.result.hasTail, detection.result.tailBits || 0)
       : formatBytesAsUtf8(detection.result.bytes, detection.result.hasTail, detection.result.tailBits || 0);
-    textOutput.value = formattedText;
-    hexOutput.textContent = formattedHex;
+    
+    // Store full text and hex
+    fullDecodedText = formattedText;
+    fullDecodedHex = formattedHex;
+    
+    // Display only first DISPLAY_BYTE_LIMIT characters with "show more" link
+    if (formattedText.length > DISPLAY_BYTE_LIMIT) {
+      const truncated = formattedText.substring(0, DISPLAY_BYTE_LIMIT);
+      textOutput.innerHTML = escapeHtml(truncated) + ' <a href="#" class="show-more-link">[show more...]</a>';
+    } else {
+      textOutput.textContent = formattedText;
+    }
+    
+    // Display only first DISPLAY_BYTE_LIMIT bytes in hex with "show more" link
+    if (detection.result.bytes.length > DISPLAY_BYTE_LIMIT) {
+      const truncatedBytes = detection.result.bytes.slice(0, DISPLAY_BYTE_LIMIT);
+      const truncatedHex = formatBytesAsHex(truncatedBytes);
+      hexOutput.innerHTML = escapeHtml(truncatedHex) + ' <a href="#" class="show-more-link">[show more...]</a>';
+    } else {
+      hexOutput.textContent = formattedHex;
+    }
 
     const summary = [
       `Detected: ${bitsPerChannel} bit(s)/channel`,
@@ -476,11 +527,31 @@ function init() {
   });
 
   copyTextButton.addEventListener('click', () =>
-    copyToClipboard(textOutput.value),
+    copyToClipboard(fullDecodedText || textOutput.textContent),
   );
   copyHexButton.addEventListener('click', () =>
-    copyToClipboard(hexOutput.textContent || ''),
+    copyToClipboard(fullDecodedHex || hexOutput.textContent || ''),
   );
+  
+  // Handle "show more" link clicks for text
+  textOutput.addEventListener('click', (e) => {
+    if (e.target.classList.contains('show-more-link')) {
+      e.preventDefault();
+      if (fullDecodedText) {
+        textOutput.textContent = fullDecodedText;
+      }
+    }
+  });
+  
+  // Handle "show more" link clicks for hex
+  hexOutput.addEventListener('click', (e) => {
+    if (e.target.classList.contains('show-more-link')) {
+      e.preventDefault();
+      if (fullDecodedHex) {
+        hexOutput.textContent = fullDecodedHex;
+      }
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
