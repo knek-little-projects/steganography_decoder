@@ -285,6 +285,38 @@ async function handleAutoDetectClick() {
         progressBar.style.width = `${percentage}%`;
         progressText.textContent = `${percentage}%`;
       },
+      onBestCandidate: (candidate) => {
+        // Update UI with current best candidate
+        if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
+          return; // Stop updating if aborted
+        }
+        
+        const formattedHex = formatBytesAsHex(candidate.result.bytes);
+        const formattedText = candidate.params.encoding === 'ascii'
+          ? formatBytesAsAscii(candidate.result.bytes, candidate.result.hasTail, candidate.result.tailBits || 0)
+          : formatBytesAsUtf8(candidate.result.bytes, candidate.result.hasTail, candidate.result.tailBits || 0);
+        
+        // Store full text and hex
+        fullDecodedText = formattedText;
+        fullDecodedHex = formattedHex;
+        
+        // Display only first DISPLAY_BYTE_LIMIT characters with "show more" link
+        if (formattedText.length > DISPLAY_BYTE_LIMIT) {
+          const truncated = formattedText.substring(0, DISPLAY_BYTE_LIMIT);
+          textOutput.innerHTML = escapeHtml(truncated) + ' <a href="#" class="show-more-link">[show more...]</a>';
+        } else {
+          textOutput.textContent = formattedText;
+        }
+        
+        // Display only first DISPLAY_BYTE_LIMIT bytes in hex with "show more" link
+        if (candidate.result.bytes.length > DISPLAY_BYTE_LIMIT) {
+          const truncatedBytes = candidate.result.bytes.slice(0, DISPLAY_BYTE_LIMIT);
+          const truncatedHex = formatBytesAsHex(truncatedBytes);
+          hexOutput.innerHTML = escapeHtml(truncatedHex) + ' <a href="#" class="show-more-link">[show more...]</a>';
+        } else {
+          hexOutput.textContent = formattedHex;
+        }
+      },
       abortSignal: autoDetectAbortController.signal,
     });
     const t1 = performance.now();

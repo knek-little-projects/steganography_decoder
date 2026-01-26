@@ -54,6 +54,7 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
     bitsPerChannel = [1, 2, 3, 4],
     quickMode = false,
     onProgress = null,
+    onBestCandidate = null,
     abortSignal = null,
   } = options;
 
@@ -178,6 +179,15 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               bestMaxLength = maxPrintableLength;
               bestParams = { bitsPerChannel: bits, ...channels, order, encoding };
               bestResult = result;
+              
+              // Notify about new best candidate
+              if (onBestCandidate) {
+                onBestCandidate({
+                  params: bestParams,
+                  result: bestResult,
+                  maxPrintableLength: bestMaxLength,
+                });
+              }
             }
           } catch (e) {
             // Re-throw abort errors
