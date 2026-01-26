@@ -460,6 +460,20 @@ button:disabled {
   line-height: 1.5;
 }
 
+.results-text.updating,
+.results-hex.updating {
+  animation: pulse-text 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-text {
+  0%, 100% {
+    color: var(--text);
+  }
+  50% {
+    color: var(--accent);
+  }
+}
+
 .show-more-link {
   color: var(--accent);
   text-decoration: none;

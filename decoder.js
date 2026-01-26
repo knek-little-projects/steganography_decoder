@@ -268,6 +268,10 @@ async function handleAutoDetectClick() {
   progressContainer.style.display = 'flex';
   progressBar.style.width = '0%';
   progressText.textContent = '0%';
+  
+  // Add updating animation to text outputs
+  textOutput.classList.add('updating');
+  hexOutput.classList.add('updating');
 
   // Create AbortController for cancellation
   autoDetectAbortController = new AbortController();
@@ -324,6 +328,10 @@ async function handleAutoDetectClick() {
     // Hide progress bar and stop button
     progressContainer.style.display = 'none';
     stopAutoDetectButton.style.display = 'none';
+    
+    // Remove updating animation
+    textOutput.classList.remove('updating');
+    hexOutput.classList.remove('updating');
 
     if (!detection.params || !detection.result) {
       setStatus('Could not detect parameters. Try manual decoding.', true);
@@ -398,6 +406,10 @@ async function handleAutoDetectClick() {
     progressContainer.style.display = 'none';
     stopAutoDetectButton.style.display = 'none';
     autoDetectAbortController = null;
+    
+    // Remove updating animation
+    textOutput.classList.remove('updating');
+    hexOutput.classList.remove('updating');
   } finally {
     autoDetectButton.disabled = false;
     decodeButton.disabled = false;
