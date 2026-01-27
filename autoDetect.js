@@ -6,6 +6,7 @@
  */
 
 import { decodeLSB, formatBytesAsAscii, formatBytesAsUtf8 } from './lsb.js';
+import { textScore } from './autoDetectHeuristics.js';
 
 // Cache for loaded dictionaries
 const dictionaryCache = new Map();
@@ -130,6 +131,62 @@ function checkTextAgainstDictionaries(text, dictionaries) {
 }
 
 /**
+ * Calculates a quality score for text based on textScore heuristics and additional checks.
+ * Higher score = better text quality.
+ * 
+ * @param {string} text - Text to evaluate
+ * @param {Object} textScoreResult - Result from textScore function { score, metrics }
+ * @returns {number} Quality score (0-100)
+ */
+function calculateTextQualityScore(text, textScoreResult) {
+  if (!text || text.length === 0 || !textScoreResult) {
+    return 0;
+  }
+  
+  // Start with textScore (0-1), convert to 0-70 range
+  let score = (textScoreResult.score || 0) * 70;
+  
+  // Add bonus based on textScore components if available
+  if (textScoreResult.metrics?.components) {
+    const comp = textScoreResult.metrics.components;
+    // These are already normalized 0-1, add small bonuses
+    score += comp.ctrlScore * 10;
+    score += comp.compScore * 5;
+    score += comp.entScore * 5;
+  }
+  
+  // Analyze text content directly for additional quality checks
+  const sample = text.substring(0, Math.min(200, text.length));
+  
+  // Count letters vs special characters
+  const letterCount = (sample.match(/[a-zA-Zа-яА-Я]/g) || []).length;
+  const letterRatio = letterCount / sample.length;
+  
+  // Prefer text with reasonable letter ratio (30-80% letters)
+  if (letterRatio >= 0.3 && letterRatio <= 0.8) {
+    score += 10;
+  } else if (letterRatio < 0.1) {
+    // Too few letters = mostly symbols/noise
+    score -= 10;
+  }
+  
+  // Prefer text with spaces (real text has spaces)
+  if (sample.includes(' ') || sample.includes('\n') || sample.includes('\t')) {
+    score += 5;
+  }
+  
+  // Penalize excessive special characters
+  const specialCharCount = (sample.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/g) || []).length;
+  const specialCharRatio = specialCharCount / sample.length;
+  if (specialCharRatio > 0.3) {
+    // Too many special characters = likely noise
+    score -= 10;
+  }
+  
+  return Math.max(0, Math.min(100, score));
+}
+
+/**
  * Calculates the maximum length of printable ASCII characters from the start of bytes.
  * Stops at the first non-printable byte.
  * 
@@ -216,6 +273,8 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
   let bestParams = null;
   let bestResult = null;
   let bestDetectedLanguage = null;
+  let bestTextScore = -1;
+  let bestTextQuality = -1;
   
   const MAX_BYTES_TO_ANALYZE = 1000;
   
@@ -276,6 +335,18 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
             // Calculate max printable length from raw bytes (first 1000 only)
             const maxPrintableLength = calculateMaxPrintableLength(bytesToAnalyze);
             
+            // Use text detection heuristics to improve candidate selection
+            // Don't filter completely - use metrics for sorting instead
+            const textScoreResult = await textScore(bytesToAnalyze, {
+              useCompression: true,
+              compressionFormat: 'gzip',
+            });
+            
+            // Check after text detection
+            if (abortSignal && abortSignal.aborted) {
+              throw new DOMException('The operation was aborted.', 'AbortError');
+            }
+            
             // Check after calculation
             if (abortSignal && abortSignal.aborted) {
               throw new DOMException('The operation was aborted.', 'AbortError');
@@ -311,20 +382,34 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               maxPrintableLength,
               dictionaryScore,
               detectedLanguage,
+              textScoreResult,
             });
             
-            // Update best candidate: prioritize dictionary matches, then max length
+            // Update best candidate: prioritize dictionary matches, then text detection quality, then max length
             let isBetter = false;
+            const currentTextScore = textScoreResult.score || 0;
+            const currentIsText = currentTextScore > 0.5; // Threshold: score > 0.5 = likely text
+            
+            // Calculate text quality score using multiple metrics
+            const currentTextQuality = calculateTextQualityScore(formattedText, textScoreResult);
+            
             if (useDictionaries && dictionaryScore > 0) {
               // If we have dictionary matches, prefer candidates with higher dictionary scores
               if (dictionaryScore > bestDictionaryScore || 
-                  (dictionaryScore === bestDictionaryScore && maxPrintableLength > bestMaxLength)) {
+                  (dictionaryScore === bestDictionaryScore && currentTextQuality > bestTextQuality)) {
                 isBetter = true;
               }
             } else {
-              // Fallback to max length if no dictionary matches
-              if (maxPrintableLength > bestMaxLength) {
+              // Fallback: prefer candidates that pass text detection, then by text quality
+              const bestIsText = bestTextScore > 0.5;
+              if (currentIsText && !bestIsText) {
                 isBetter = true;
+              } else if (currentIsText === bestIsText) {
+                // Both are text or both are not - prefer better text quality, then max length
+                if (currentTextQuality > bestTextQuality || 
+                    (Math.abs(currentTextQuality - bestTextQuality) < 0.1 && maxPrintableLength > bestMaxLength)) {
+                  isBetter = true;
+                }
               }
             }
             
@@ -334,6 +419,8 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               bestParams = { bitsPerChannel: bits, ...channels, order, encoding };
               bestResult = result;
               bestDetectedLanguage = detectedLanguage;
+              bestTextScore = currentTextScore;
+              bestTextQuality = currentTextQuality;
               
               // Notify about new best candidate
               if (onBestCandidate) {
@@ -358,7 +445,7 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
     }
   }
   
-  // Sort candidates: prioritize dictionary scores, then max printable length
+  // Sort candidates: prioritize dictionary scores, then text detection, then text quality, then max printable length
   candidates.sort((a, b) => {
     // If both have dictionary scores, sort by dictionary score first
     if (useDictionaries && a.dictionaryScore > 0 && b.dictionaryScore > 0) {
@@ -366,7 +453,28 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
         return b.dictionaryScore - a.dictionaryScore;
       }
     }
-    // Then by max printable length
+    
+    // Then prioritize candidates that pass text detection (textScore > 0.5)
+    const aTextScore = a.textScoreResult?.score ?? 0;
+    const bTextScore = b.textScoreResult?.score ?? 0;
+    const aIsText = aTextScore > 0.5;
+    const bIsText = bTextScore > 0.5;
+    if (aIsText && !bIsText) return -1;
+    if (!aIsText && bIsText) return 1;
+    
+    // If both are text or both are not, sort by textScore
+    if (Math.abs(aTextScore - bTextScore) > 0.05) {
+      return bTextScore - aTextScore;
+    }
+    
+    // Then by text quality score
+    const aQuality = calculateTextQualityScore(a.result.text, a.textScoreResult);
+    const bQuality = calculateTextQualityScore(b.result.text, b.textScoreResult);
+    if (Math.abs(aQuality - bQuality) > 1) {
+      return bQuality - aQuality;
+    }
+    
+    // Finally by max printable length
     return b.maxPrintableLength - a.maxPrintableLength;
   });
   
