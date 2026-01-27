@@ -149,6 +149,13 @@ body {
     transform 0.1s ease;
 }
 
+.upload-content {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
 .upload-area.drag-over {
   border-color: var(--accent);
   background-color: rgba(15, 118, 110, 0.1);
@@ -164,6 +171,18 @@ body {
 
 .upload-text {
   margin: 0;
+}
+
+.upload-button {
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text);
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  box-shadow: none;
+}
+
+.upload-button:hover {
+  border-color: rgba(148, 163, 184, 0.9);
 }
 
 .image-preview-container,
