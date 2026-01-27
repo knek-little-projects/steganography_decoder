@@ -7,6 +7,128 @@
 
 import { decodeLSB, formatBytesAsAscii, formatBytesAsUtf8 } from './lsb.js';
 
+// Cache for loaded dictionaries
+const dictionaryCache = new Map();
+
+/**
+ * Available dictionary languages
+ */
+const DICTIONARY_LANGUAGES = ['english', 'german', 'russian', 'french', 'spanish'];
+
+/**
+ * Loads a dictionary file for a given language.
+ * 
+ * @param {string} language - Language code (e.g., 'english', 'german')
+ * @returns {Promise<Set<string>>} Set of words from the dictionary
+ */
+async function loadDictionary(language) {
+  // Check cache first
+  if (dictionaryCache.has(language)) {
+    return dictionaryCache.get(language);
+  }
+
+  try {
+    const response = await fetch(`./dictionaries/${language}.txt`);
+    if (!response.ok) {
+      console.warn(`Failed to load dictionary for ${language}`);
+      return new Set();
+    }
+    
+    const text = await response.text();
+    const words = text
+      .split(/\W+/)
+      .map(line => line.trim().toLowerCase())
+      .filter(word => word.length > 0);
+    
+    const wordSet = new Set(words);
+    dictionaryCache.set(language, wordSet);
+    return wordSet;
+  } catch (error) {
+    console.warn(`Error loading dictionary for ${language}:`, error);
+    return new Set();
+  }
+}
+
+/**
+ * Loads all available dictionaries.
+ * 
+ * @returns {Promise<Map<string, Set<string>>>} Map of language to word set
+ */
+async function loadAllDictionaries() {
+  const dictionaries = new Map();
+  
+  for (const language of DICTIONARY_LANGUAGES) {
+    const words = await loadDictionary(language);
+    if (words.size > 0) {
+      dictionaries.set(language, words);
+    }
+  }
+  
+  return dictionaries;
+}
+
+/**
+ * Checks text against dictionaries and returns scores for each language.
+ * 
+ * @param {string} text - Text to check
+ * @param {Map<string, Set<string>>} dictionaries - Map of language to word set
+ * @returns {Object} Object with language scores and detected language
+ */
+function checkTextAgainstDictionaries(text, dictionaries) {
+  if (!text || text.length === 0 || dictionaries.size === 0) {
+    return { scores: {}, detectedLanguage: null, maxScore: 0 };
+  }
+
+  // Extract words from text (case-insensitive, split by non-word characters)
+  const words = text
+    .toLowerCase()
+    .split(/\W+/)
+    .filter(word => word.length > 0);
+
+  if (words.length === 0) {
+    return { scores: {}, detectedLanguage: null, maxScore: 0 };
+  }
+
+  const scores = {};
+  let maxScore = 0;
+  let detectedLanguage = null;
+
+  // Check each dictionary
+  for (const [language, dictionary] of dictionaries.entries()) {
+    let matches = 0;
+    let totalWords = 0;
+    let matchedChars = 0
+
+    for (const word of words) {
+      // Check exact match
+      if (dictionary.has(word)) {
+        matches++;
+        matchedChars += word.length
+      }
+      totalWords++;
+    }
+
+    // Calculate score: ratio of matches to total words
+    // const score = totalWords > 0 ? matches / totalWords : 0;
+    let score = 0
+    if (text.length > 0) {
+      score = matchedChars / text.length
+    }
+    scores[language] = {
+      matches,
+      totalWords,
+      score,
+    };
+
+    if (score > maxScore) {
+      maxScore = score;
+      detectedLanguage = language;
+    }
+  }
+
+  return { scores, detectedLanguage, maxScore };
+}
+
 /**
  * Calculates the maximum length of printable ASCII characters from the start of bytes.
  * Stops at the first non-printable byte.
@@ -58,6 +180,10 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
     abortSignal = null,
   } = options;
 
+  // Load dictionaries for language detection
+  const dictionaries = await loadAllDictionaries();
+  const useDictionaries = dictionaries.size > 0;
+
   const possibleBits = quickMode ? [1, 2] : bitsPerChannel;
   
   // Channel combinations (most common first)
@@ -86,8 +212,10 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
   
   const candidates = [];
   let bestMaxLength = -1;
+  let bestDictionaryScore = -1;
   let bestParams = null;
   let bestResult = null;
+  let bestDetectedLanguage = null;
   
   const MAX_BYTES_TO_ANALYZE = 1000;
   
@@ -168,17 +296,44 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               text: formattedText,
             };
             
+            // Check against dictionaries if available
+            let dictionaryScore = 0;
+            let detectedLanguage = null;
+            if (useDictionaries) {
+              const dictResult = checkTextAgainstDictionaries(formattedText, dictionaries);
+              dictionaryScore = dictResult.maxScore;
+              detectedLanguage = dictResult.detectedLanguage;
+            }
+            
             candidates.push({
               params: { bitsPerChannel: bits, ...channels, order, encoding },
               result,
               maxPrintableLength,
+              dictionaryScore,
+              detectedLanguage,
             });
             
-            // Update best candidate if max length is better
-            if (maxPrintableLength > bestMaxLength) {
+            // Update best candidate: prioritize dictionary matches, then max length
+            let isBetter = false;
+            if (useDictionaries && dictionaryScore > 0) {
+              // If we have dictionary matches, prefer candidates with higher dictionary scores
+              if (dictionaryScore > bestDictionaryScore || 
+                  (dictionaryScore === bestDictionaryScore && maxPrintableLength > bestMaxLength)) {
+                isBetter = true;
+              }
+            } else {
+              // Fallback to max length if no dictionary matches
+              if (maxPrintableLength > bestMaxLength) {
+                isBetter = true;
+              }
+            }
+            
+            if (isBetter) {
               bestMaxLength = maxPrintableLength;
+              bestDictionaryScore = dictionaryScore;
               bestParams = { bitsPerChannel: bits, ...channels, order, encoding };
               bestResult = result;
+              bestDetectedLanguage = detectedLanguage;
               
               // Notify about new best candidate
               if (onBestCandidate) {
@@ -186,6 +341,8 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
                   params: bestParams,
                   result: bestResult,
                   maxPrintableLength: bestMaxLength,
+                  dictionaryScore: bestDictionaryScore,
+                  detectedLanguage: bestDetectedLanguage,
                 });
               }
             }
@@ -201,13 +358,24 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
     }
   }
   
-  // Sort candidates by max printable length (descending)
-  candidates.sort((a, b) => b.maxPrintableLength - a.maxPrintableLength);
+  // Sort candidates: prioritize dictionary scores, then max printable length
+  candidates.sort((a, b) => {
+    // If both have dictionary scores, sort by dictionary score first
+    if (useDictionaries && a.dictionaryScore > 0 && b.dictionaryScore > 0) {
+      if (Math.abs(a.dictionaryScore - b.dictionaryScore) > 0.01) {
+        return b.dictionaryScore - a.dictionaryScore;
+      }
+    }
+    // Then by max printable length
+    return b.maxPrintableLength - a.maxPrintableLength;
+  });
   
   return {
     params: bestParams,
     result: bestResult,
     maxPrintableLength: bestMaxLength,
+    dictionaryScore: bestDictionaryScore,
+    detectedLanguage: bestDetectedLanguage,
     candidates: candidates.slice(0, 10), // Return top 10 candidates
   };
 }
