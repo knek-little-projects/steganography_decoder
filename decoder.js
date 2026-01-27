@@ -7,6 +7,7 @@ const fileInput = document.getElementById('fileInput');
 const dropZone = document.getElementById('dropZone');
 const imagePreview = document.getElementById('imagePreview');
 const metadataList = document.getElementById('metadataList');
+const panelLeft = document.querySelector('.panel-left');
 
 const bitsPerChannelInput = document.getElementById('bitsPerChannel');
 const channelRInput = document.getElementById('channelR');
@@ -42,6 +43,12 @@ let currentFile = null;
 let currentImageData = null;
 
 const STORAGE_KEY = 'lsb_decoder_settings_v1';
+
+function updateImageUI(hasImage) {
+  if (!panelLeft) return;
+  panelLeft.classList.toggle('no-image', !hasImage);
+  panelLeft.classList.toggle('has-image', hasImage);
+}
 
 function getSelectedEncoding() {
   const checked = Array.from(encodingRadios).find((r) => r.checked);
@@ -449,6 +456,7 @@ function handleFile(file) {
         imagePreview.src = url;
         imagePreview.style.display = 'block';
         updateMetadata(file, currentImageData);
+        updateImageUI(true);
         // Notify encoder about new image
         if (typeof setImageForEncode === 'function') {
           setImageForEncode(currentImageData);
@@ -459,6 +467,7 @@ function handleFile(file) {
         currentImageData = null;
         imagePreview.removeAttribute('src');
         updateMetadata(null, null);
+        updateImageUI(false);
         setStatus('Failed to read pixels from image.', true);
       }
     };
@@ -466,6 +475,7 @@ function handleFile(file) {
       currentImageData = null;
       imagePreview.removeAttribute('src');
       updateMetadata(null, null);
+      updateImageUI(false);
       setStatus('Failed to load image.', true);
     };
     img.src = url;
@@ -564,6 +574,7 @@ function init() {
   restoreSettings();
   ensureAtLeastOneChannel();
   initTabs();
+  updateImageUI(false);
 
   fileInput.addEventListener('change', handleFileInputChange);
 

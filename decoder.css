@@ -114,6 +114,21 @@ body {
   flex-direction: column;
 }
 
+/* When no image is selected, stretch the upload area and hide preview/metadata */
+.panel-left.no-image .upload-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-left.no-image .image-preview-container,
+.panel-left.no-image .metadata-container,
+.panel-left.no-image .capacity-info {
+  display: none;
+}
+
 .panel h2 {
   margin: 0 0 10px;
   font-size: 16px;
