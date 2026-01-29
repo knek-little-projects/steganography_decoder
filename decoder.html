@@ -61,81 +61,91 @@
         <h2>Decoder</h2>
 
         <form id="decoderForm" class="decoder-form">
-          <div class="form-row">
-            <label for="bitsPerChannel">Bits per channel</label>
-            <input
-              id="bitsPerChannel"
-              type="number"
-              min="1"
-              max="8"
-              step="1"
-              value="1"
-            />
-          </div>
-
-          <div class="form-row">
-            <span class="label">Channels</span>
-            <div class="checkbox-group">
-              <label>
-                <input id="channelR" type="checkbox" checked />
-                R
-              </label>
-              <label>
-                <input id="channelG" type="checkbox" checked />
-                G
-              </label>
-              <label>
-                <input id="channelB" type="checkbox" checked />
-                B
-              </label>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <span class="label">Pixel order</span>
-            <div class="radio-group">
-              <label>
-                <input
-                  type="radio"
-                  name="pixelOrder"
-                  value="row"
-                  checked
-                />
-                Left to right (rows)
-              </label>
-              <label>
-                <input type="radio" name="pixelOrder" value="column" />
-                Top to bottom (columns)
-              </label>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <span class="label">Encoding</span>
-            <div class="radio-group">
-              <label>
-                <input
-                  type="radio"
-                  name="encoding"
-                  value="utf8"
-                  checked
-                />
-                UTF-8
-              </label>
-              <label>
-                <input type="radio" name="encoding" value="ascii" />
-                ASCII
-              </label>
-            </div>
-          </div>
-
           <div class="form-row form-actions">
-            <div class="button-group">
-              <button id="decodeButton" type="button">Decode</button>
-              <button id="autoDetectButton" type="button" class="button-secondary">Auto-detect Parameters</button>
-              <button id="stopAutoDetectButton" type="button" class="button-secondary" style="display: none;">Stop</button>
+            <div class="button-group decode-mode-buttons">
+              <button id="autoDetectButton" type="button" class="button-primary decode-mode-btn">AUTO DECODE</button>
+              <button id="manualDecodeToggle" type="button" class="button-secondary decode-mode-btn">
+                <span class="toggle-arrow">▶</span> MANUAL DECODE
+              </button>
             </div>
             <span id="statusLabel" class="status-label"></span>
+          </div>
+          <div id="currentParamsInfo" class="current-params-info" style="display: none;">
+            <span id="currentParamsText" class="current-params-text"></span>
+          </div>
+
+          <div id="manualDecodeOptions" class="manual-decode-options" style="display: none;">
+            <div class="form-row">
+              <label for="bitsPerChannel">Bits per channel</label>
+              <input
+                id="bitsPerChannel"
+                type="number"
+                min="1"
+                max="8"
+                step="1"
+                value="1"
+              />
+            </div>
+
+            <div class="form-row">
+              <span class="label">Channels</span>
+              <div class="checkbox-group">
+                <label>
+                  <input id="channelR" type="checkbox" checked />
+                  R
+                </label>
+                <label>
+                  <input id="channelG" type="checkbox" checked />
+                  G
+                </label>
+                <label>
+                  <input id="channelB" type="checkbox" checked />
+                  B
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <span class="label">Pixel order</span>
+              <div class="radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    name="pixelOrder"
+                    value="row"
+                    checked
+                  />
+                  Left to right (rows)
+                </label>
+                <label>
+                  <input type="radio" name="pixelOrder" value="column" />
+                  Top to bottom (columns)
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <span class="label">Encoding</span>
+              <div class="radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    name="encoding"
+                    value="utf8"
+                    checked
+                  />
+                  UTF-8
+                </label>
+                <label>
+                  <input type="radio" name="encoding" value="ascii" />
+                  ASCII
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row form-actions">
+              <button id="decodeButton" type="button" style="width: 100%;">Decode</button>
+            </div>
           </div>
           <div id="progressContainer" class="progress-container" style="display: none;">
             <div class="progress-bar">
@@ -145,7 +155,15 @@
           </div>
         </form>
 
-        <section class="results-section">
+        <section id="candidatesSection" class="candidates-section" style="display: none;">
+          <div class="results-header">
+            <h3>Detection candidates</h3>
+            <span class="candidates-count"></span>
+          </div>
+          <div id="candidatesList" class="candidates-list"></div>
+        </section>
+
+        <section id="decodedTextSection" class="results-section" style="display: none;">
           <div class="results-header">
             <h3>Decoded text</h3>
             <div class="header-buttons">
@@ -158,7 +176,7 @@
           ></div>
         </section>
 
-        <section class="results-section">
+        <section id="hexViewSection" class="results-section" style="display: none;">
           <div class="results-header">
             <h3>Hex view</h3>
             <button id="copyHexButton" type="button">Copy hex</button>
@@ -187,78 +205,86 @@
           </div>
 
           <div class="form-row">
-            <label for="encodeBitsPerChannel">Bits per channel</label>
-            <input
-              id="encodeBitsPerChannel"
-              type="number"
-              min="1"
-              max="8"
-              step="1"
-              value="1"
-            />
+            <button type="button" id="toggleEncoderOptions" class="toggle-options-btn">
+              <span class="toggle-icon">▼</span> Show encoder options
+            </button>
           </div>
 
-          <div class="form-row">
-            <span class="label">Channels</span>
-            <div class="checkbox-group">
+          <div id="encoderOptions" class="encoder-options" style="display: none;">
+            <div class="form-row">
+              <label for="encodeBitsPerChannel">Bits per channel</label>
+              <input
+                id="encodeBitsPerChannel"
+                type="number"
+                min="1"
+                max="8"
+                step="1"
+                value="1"
+              />
+            </div>
+
+            <div class="form-row">
+              <span class="label">Channels</span>
+              <div class="checkbox-group">
+                <label>
+                  <input id="encodeChannelR" type="checkbox" checked />
+                  R
+                </label>
+                <label>
+                  <input id="encodeChannelG" type="checkbox" checked />
+                  G
+                </label>
+                <label>
+                  <input id="encodeChannelB" type="checkbox" checked />
+                  B
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <span class="label">Pixel order</span>
+              <div class="radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    name="encodePixelOrder"
+                    value="row"
+                    checked
+                  />
+                  Left to right (rows)
+                </label>
+                <label>
+                  <input type="radio" name="encodePixelOrder" value="column" />
+                  Top to bottom (columns)
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <span class="label">Encoding</span>
+              <div class="radio-group">
+                <label>
+                  <input
+                    type="radio"
+                    name="encodeEncoding"
+                    value="utf8"
+                    checked
+                  />
+                  UTF-8
+                </label>
+                <label>
+                  <input type="radio" name="encodeEncoding" value="ascii" />
+                  ASCII
+                </label>
+              </div>
+            </div>
+
+            <div class="form-row">
               <label>
-                <input id="encodeChannelR" type="checkbox" checked />
-                R
-              </label>
-              <label>
-                <input id="encodeChannelG" type="checkbox" checked />
-                G
-              </label>
-              <label>
-                <input id="encodeChannelB" type="checkbox" checked />
-                B
+                <input id="fillWithZeros" type="checkbox" checked />
+                Fill remaining capacity with zeros
               </label>
             </div>
-          </div>
-
-          <div class="form-row">
-            <span class="label">Pixel order</span>
-            <div class="radio-group">
-              <label>
-                <input
-                  type="radio"
-                  name="encodePixelOrder"
-                  value="row"
-                  checked
-                />
-                Left to right (rows)
-              </label>
-              <label>
-                <input type="radio" name="encodePixelOrder" value="column" />
-                Top to bottom (columns)
-              </label>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <span class="label">Encoding</span>
-            <div class="radio-group">
-              <label>
-                <input
-                  type="radio"
-                  name="encodeEncoding"
-                  value="utf8"
-                  checked
-                />
-                UTF-8
-              </label>
-              <label>
-                <input type="radio" name="encodeEncoding" value="ascii" />
-                ASCII
-              </label>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <label>
-              <input id="fillWithZeros" type="checkbox" />
-              Fill remaining capacity with zeros
-            </label>
           </div>
 
           <div class="form-row form-actions">
@@ -267,7 +293,7 @@
           </div>
         </form>
 
-        <section class="results-section">
+        <section id="encodedPreviewSection" class="results-section" style="display: none;">
           <div class="results-header">
             <h3>Encoded image preview</h3>
             <button id="downloadButton" type="button" class="secondary" style="display: none;">

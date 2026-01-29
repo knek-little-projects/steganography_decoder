@@ -10,6 +10,9 @@ const encodedCanvas = document.getElementById('encodedCanvas');
 const downloadButton = document.getElementById('downloadButton');
 const capacityInfo = document.getElementById('capacityInfo');
 const capacityText = document.getElementById('capacityText');
+const encodedPreviewSection = document.getElementById('encodedPreviewSection');
+const toggleEncoderOptionsBtn = document.getElementById('toggleEncoderOptions');
+const encoderOptions = document.getElementById('encoderOptions');
 
 const encodeBitsPerChannelInput = document.getElementById('encodeBitsPerChannel');
 const encodeChannelRInput = document.getElementById('encodeChannelR');
@@ -116,6 +119,10 @@ if (encodeButton) {
     const ctx = encodedCanvas.getContext('2d');
     ctx.putImageData(encodedImageData, 0, 0);
 
+    // Show encoded preview section
+    if (encodedPreviewSection) {
+      encodedPreviewSection.style.display = 'flex';
+    }
     downloadButton.style.display = 'inline-flex';
     setEncodeStatus('Encoded successfully!');
   } catch (error) {
@@ -146,4 +153,13 @@ if (downloadButton) {
 encodeEncodingRadios.forEach(radio => {
   if (radio) radio.addEventListener('change', updateCapacity);
 });
+
+// Toggle encoder options visibility
+if (toggleEncoderOptionsBtn && encoderOptions) {
+  toggleEncoderOptionsBtn.addEventListener('click', () => {
+    const isVisible = encoderOptions.style.display !== 'none';
+    encoderOptions.style.display = isVisible ? 'none' : 'block';
+    toggleEncoderOptionsBtn.innerHTML = `<span class="toggle-icon">${isVisible ? '▼' : '▲'}</span> ${isVisible ? 'Show' : 'Hide'} encoder options`;
+  });
+}
 

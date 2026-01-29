@@ -1,6 +1,7 @@
-// Returns a numeric score: higher = more likely "valid text", lower = more likely noise.
-// Input: string | Uint8Array | ArrayBuffer
-// Uses fast heuristics + (optionally) CompressionStream for compressibility.
+// Cut input to the first NON-printable byte (ASCII/UTF-8 bytes level),
+// then return a text-likeness score in [0, 1].
+// "Printable" here: bytes 0x20..0x7E plus \t \n \r.
+// Assumption: data is ASCII or UTF-8, and anything outside this set is a hard boundary.
 
 const OK_CTRL = new Set([9, 10, 13]); // \t \n \r
 
@@ -9,6 +10,26 @@ function toBytes(input) {
   if (input instanceof ArrayBuffer) return new Uint8Array(input);
   if (typeof input === "string") return new TextEncoder().encode(input);
   throw new TypeError("Input must be string, Uint8Array, or ArrayBuffer");
+}
+
+function isPrintableByte(b) {
+  return (b >= 0x20 && b <= 0x7e) || OK_CTRL.has(b);
+}
+
+function cutAtFirstNonPrintable(bytes) {
+  let i = 0;
+  for (; i < bytes.length; i++) {
+    if (!isPrintableByte(bytes[i])) break;
+  }
+  return i === bytes.length ? bytes : bytes.subarray(0, i);
+}
+
+function clamp01(x) {
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
+function sigmoid(x) {
+  return 1 / (1 + Math.exp(-x));
 }
 
 function shannonEntropyBytes(bytes) {
@@ -31,7 +52,6 @@ function shannonEntropyBytes(bytes) {
 function uniqueBigramRatio(bytes) {
   const n = bytes.length;
   if (n < 2) return 1;
-
   const total = n - 1;
   const seen = new Set();
   for (let i = 0; i < total; i++) {
@@ -59,120 +79,104 @@ async function compressRatio(bytes, format = "gzip") {
   return total / bytes.length;
 }
 
-function clamp01(x) {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
-}
-
-function sigmoid(x) {
-  return 1 / (1 + Math.exp(-x));
-}
-
 /**
- * textScore(input) -> { score, metrics }
+ * score in [0,1], higher = more likely valid text.
  *
- * score in [0, 1]: higher = more text-like.
- * metrics: raw features you can log to tune thresholds.
+ * NOTE: because we cut at first non-printable byte, this scorer is mainly for
+ * "does the prefix look like text?" and will intentionally ignore anything after
+ * the first binary/control byte.
  */
 export async function textScore(input, opts = {}) {
   const {
     useCompression = true,
-    compressionFormat = "gzip", // "gzip" or "deflate"
-    // Calibration knobs (tune on your data)
-    minLen = 32,
+    compressionFormat = "gzip",
+    shortLen = 24,
   } = opts;
 
-  const bytes = toBytes(input);
+  let bytes = toBytes(input);
+  const origSize = bytes.length;
+  bytes = cutAtFirstNonPrintable(bytes);
   const n = bytes.length;
 
-  // Very short: not enough signal, give a conservative score
-  if (n < minLen) {
+  if (n === 0) {
     return {
-      score: n === 0 ? 0 : 0.3,
-      metrics: { size: n, reason: "too_short" },
+      score: 0,
+      metrics: { origSize, size: 0, cut: true, reason: "starts_with_non_printable" },
     };
   }
 
-  let badCtrl = 0;
-  let printable = 0;
-  let spaces = 0;
-  let newlines = 0;
+  // Since we already cut at the first non-printable, badCtrlRatio is 0 by construction,
+  // but keep metrics anyway.
+  const entropy = shannonEntropyBytes(bytes);
+  const uniqBi = uniqueBigramRatio(bytes);
+  const compR = useCompression
+    ? await compressRatio(bytes, compressionFormat).catch(() => null)
+    : null;
 
-  for (let i = 0; i < n; i++) {
-    const x = bytes[i];
-    if (x === 32 || x === 9) spaces++;
-    if (x === 10) newlines++;
+  // quick character-class metrics on the decoded prefix
+  const s = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  const len = s.length || 1;
 
-    if (x < 32 && !OK_CTRL.has(x)) badCtrl++;
-    else printable++;
+  let letters = 0, digits = 0, spaces = 0, punct = 0;
+  const reLetter = /\p{L}/u;
+  const reDigit = /\p{N}/u;
+  const reSpace = /\s/u;
+  const rePunctSym = /[\p{P}\p{S}]/u;
+
+  for (const ch of s) {
+    if (reLetter.test(ch)) letters++;
+    else if (reDigit.test(ch)) digits++;
+    else if (reSpace.test(ch)) spaces++;
+    else if (rePunctSym.test(ch)) punct++;
   }
 
-  const badCtrlRatio = badCtrl / n;
-  const printableRatio = printable / n;
-  const spaceRatio = spaces / n;
-  const newlineRatio = newlines / n;
+  const letterRatio = letters / len;
+  const spaceRatio = spaces / len;
+  const punctRatio = punct / len;
 
-  const entropy = shannonEntropyBytes(bytes);      // 0..8
-  const uniqBi = uniqueBigramRatio(bytes);         // 0..1
-
-  let compR = null;
-  if (useCompression) {
-    try {
-      compR = await compressRatio(bytes, compressionFormat); // ~0.2..1.2
-    } catch {
-      compR = null;
-    }
+  // Short strings: mostly letters -> high score
+  if (len < shortLen) {
+    const score =
+      clamp01(letterRatio / 0.7) *
+      (0.5 + 0.5 * clamp01(spaceRatio / 0.08)) *
+      (1 - clamp01(punctRatio / 0.6));
+    return {
+      score: clamp01(score),
+      metrics: { origSize, size: n, cut: n !== origSize, mode: "short", entropy, uniqBigramRatio: uniqBi, compressRatio: compR, letterRatio, spaceRatio, punctRatio },
+    };
   }
 
-  // ---- Turn raw metrics into 0..1 sub-scores (higher = better) ----
+  // Map to 0..1 (higher = more text-like)
+  const entScore = clamp01((7.4 - entropy) / (7.4 - 5.4));          // <=5.4 good, >=7.4 bad
+  const biScore  = clamp01((0.92 - uniqBi) / (0.92 - 0.55));        // <=0.55 good, >=0.92 bad
+  const compScore = compR == null ? 0.5 : clamp01((0.95 - compR) / (0.95 - 0.55));
 
-  // Control bytes: 0% is best, >2% is very suspicious
-  const ctrlScore = clamp01(1 - badCtrlRatio / 0.02);
+  // Content gates: require some letters; penalize punctuation-heavy prefixes
+  const letterGate = clamp01((letterRatio - 0.08) / 0.22);
+  const punctGate  = 1 - clamp01((punctRatio - 0.40) / 0.25);
+  const spaceGate  = 0.5 + 0.5 * clamp01((spaceRatio - 0.005) / 0.04);
 
-  // Entropy: typical natural text often ~4-6 bits/byte; near 8 is noise.
-  // Map: <=5.2 => ~1, >=7.6 => ~0
-  const entScore = clamp01((7.6 - entropy) / (7.6 - 5.2));
+  const raw = 1.6 * compScore + 1.4 * entScore + 0.8 * biScore;
+  let score = sigmoid((raw - 2.0) / 0.8);
 
-  // Unique bigrams: noise tends to be very high (close to 1) for long data.
-  // Map: <=0.55 => ~1, >=0.92 => ~0
-  const biScore = clamp01((0.92 - uniqBi) / (0.92 - 0.55));
-
-  // Whitespace: many real texts have some; but allow minified text.
-  // Map: >=3% whitespace => ~1, <=0.5% => ~0.2
-  const ws = spaceRatio + newlineRatio;
-  const wsScore = clamp01((ws - 0.005) / (0.03 - 0.005));
-  const wsScoreSoft = 0.2 + 0.8 * wsScore; // never fully kills
-
-  // Compression: lower ratio => more structured => more text-like.
-  // Map: <=0.55 => ~1, >=0.95 => ~0
-  const compScore =
-    compR == null ? 0.5 : clamp01((0.95 - compR) / (0.95 - 0.55));
-
-  // ---- Combine (weights tuned to favor robust features) ----
-  // Strongest: ctrlScore, compScore, entScore
-  // Support: biScore, wsScoreSoft
-  const raw =
-    2.2 * ctrlScore +
-    1.8 * compScore +
-    1.6 * entScore +
-    0.9 * biScore +
-    0.6 * wsScoreSoft;
-
-  // Convert to [0,1]
-  // Center around ~3.5, scale ~1.2 (tweak if needed)
-  const score = sigmoid((raw - 3.5) / 1.2);
+  score *= (0.15 + 0.85 * letterGate);
+  score *= (0.30 + 0.70 * punctGate);
+  score *= spaceGate;
 
   return {
-    score,
+    score: clamp01(score),
     metrics: {
+      origSize,
       size: n,
-      badCtrlRatio,
-      printableRatio,
-      spaceRatio,
-      newlineRatio,
+      cut: n !== origSize,
+      mode: "long",
       entropy,
       uniqBigramRatio: uniqBi,
       compressRatio: compR,
-      components: { ctrlScore, compScore, entScore, biScore, wsScoreSoft },
+      letterRatio,
+      spaceRatio,
+      punctRatio,
+      components: { compScore, entScore, biScore, letterGate, punctGate, spaceGate },
       raw,
     },
   };

@@ -234,6 +234,8 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
     quickMode = false,
     onProgress = null,
     onBestCandidate = null,
+    onCandidate = null, // Callback for each candidate found
+    onCurrentParams = null, // Callback for current parameters being tested
     abortSignal = null,
   } = options;
 
@@ -304,6 +306,19 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
           
           currentCombination++;
           
+          // Report current parameters being tested
+          if (onCurrentParams) {
+            const channelsStr = `${channels.useR ? 'R' : ''}${channels.useG ? 'G' : ''}${channels.useB ? 'B' : ''}`;
+            onCurrentParams({
+              bitsPerChannel: bits,
+              channels: channelsStr,
+              order: order,
+              encoding: encoding,
+              current: currentCombination,
+              total: totalCombinations,
+            });
+          }
+          
           // Report progress
           if (onProgress) {
             const percentage = Math.round((currentCombination / totalCombinations) * 100);
@@ -352,38 +367,81 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               throw new DOMException('The operation was aborted.', 'AbortError');
             }
             
-            // Format bytes to text (use full bytes for result, but only analyze first 1000)
-            const formattedText = encoding === 'ascii'
-              ? formatBytesAsAscii(decoded.bytes, decoded.hasTail, decoded.tailBits || 0)
-              : formatBytesAsUtf8(decoded.bytes, decoded.hasTail, decoded.tailBits || 0);
-            
             // Check after formatting
             if (abortSignal && abortSignal.aborted) {
               throw new DOMException('The operation was aborted.', 'AbortError');
             }
             
-            const result = {
-              ...decoded,
-              text: formattedText,
-            };
+            // Use first 1000 bytes for dictionary check (more accurate)
+            const DICTIONARY_CHECK_BYTES = 1000;
+            const dictionaryCheckBytes = decoded.bytes.slice(0, DICTIONARY_CHECK_BYTES);
+            const dictionaryCheckText = encoding === 'ascii'
+              ? formatBytesAsAscii(dictionaryCheckBytes, decoded.hasTail && decoded.bytes.length <= DICTIONARY_CHECK_BYTES, decoded.tailBits || 0)
+              : formatBytesAsUtf8(dictionaryCheckBytes, decoded.hasTail && decoded.bytes.length <= DICTIONARY_CHECK_BYTES, decoded.tailBits || 0);
             
-            // Check against dictionaries if available
+            // Check against dictionaries using first 1000 bytes
             let dictionaryScore = 0;
             let detectedLanguage = null;
             if (useDictionaries) {
-              const dictResult = checkTextAgainstDictionaries(formattedText, dictionaries);
+              const dictResult = checkTextAgainstDictionaries(dictionaryCheckText, dictionaries);
               dictionaryScore = dictResult.maxScore;
               detectedLanguage = dictResult.detectedLanguage;
             }
             
-            candidates.push({
+            // Store only first 100 bytes for preview to save memory
+            const PREVIEW_BYTES = 100;
+            const previewBytes = decoded.bytes.slice(0, PREVIEW_BYTES);
+            
+            // Format preview text for sorting (only first 100 bytes)
+            const previewText = encoding === 'ascii'
+              ? formatBytesAsAscii(previewBytes, false, 0)
+              : formatBytesAsUtf8(previewBytes, false, 0);
+            
+            const previewResult = {
+              ...decoded,
+              bytes: previewBytes,
+              byteCount: Math.min(decoded.byteCount, PREVIEW_BYTES),
+              text: previewText, // Preview text for sorting
+            };
+            
+            const candidate = {
               params: { bitsPerChannel: bits, ...channels, order, encoding },
-              result,
+              result: previewResult, // Only first 100 bytes
               maxPrintableLength,
               dictionaryScore,
               detectedLanguage,
               textScoreResult,
-            });
+            };
+            
+            candidates.push(candidate);
+            
+            // Notify about new candidate (for real-time display)
+            if (onCandidate) {
+              // Sort candidates before passing to callback
+              const sortedCandidates = [...candidates].sort((a, b) => {
+                if (useDictionaries && a.dictionaryScore > 0 && b.dictionaryScore > 0) {
+                  if (Math.abs(a.dictionaryScore - b.dictionaryScore) > 0.01) {
+                    return b.dictionaryScore - a.dictionaryScore;
+                  }
+                }
+                const aTextScore = a.textScoreResult?.score ?? 0;
+                const bTextScore = b.textScoreResult?.score ?? 0;
+                const aIsText = aTextScore > 0.5;
+                const bIsText = bTextScore > 0.5;
+                if (aIsText && !bIsText) return -1;
+                if (!aIsText && bIsText) return 1;
+                if (Math.abs(aTextScore - bTextScore) > 0.05) {
+                  return bTextScore - aTextScore;
+                }
+                const aQuality = calculateTextQualityScore(a.result.text, a.textScoreResult);
+                const bQuality = calculateTextQualityScore(b.result.text, b.textScoreResult);
+                if (Math.abs(aQuality - bQuality) > 1) {
+                  return bQuality - aQuality;
+                }
+                return b.maxPrintableLength - a.maxPrintableLength;
+              });
+              onCandidate(sortedCandidates);
+            }
             
             // Update best candidate: prioritize dictionary matches, then text detection quality, then max length
             let isBetter = false;
@@ -484,7 +542,7 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
     maxPrintableLength: bestMaxLength,
     dictionaryScore: bestDictionaryScore,
     detectedLanguage: bestDetectedLanguage,
-    candidates: candidates.slice(0, 10), // Return top 10 candidates
+    candidates: candidates, // Return all candidates
   };
 }
 
@@ -643,7 +701,7 @@ export function autoDetectParameters(imageData, options = {}) {
     params: bestParams,
     result: bestResult,
     score: bestScore,
-    candidates: candidates.slice(0, 10), // Top 10 candidates
+    candidates: candidates, // Return all candidates
   };
 }
 

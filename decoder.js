@@ -15,7 +15,8 @@ const channelGInput = document.getElementById('channelG');
 const channelBInput = document.getElementById('channelB');
 const decodeButton = document.getElementById('decodeButton');
 const autoDetectButton = document.getElementById('autoDetectButton');
-const stopAutoDetectButton = document.getElementById('stopAutoDetectButton');
+const manualDecodeToggle = document.getElementById('manualDecodeToggle');
+const manualDecodeOptions = document.getElementById('manualDecodeOptions');
 const statusLabel = document.getElementById('statusLabel');
 const progressContainer = document.getElementById('progressContainer');
 const progressBar = document.getElementById('progressBar');
@@ -25,6 +26,12 @@ const textOutput = document.getElementById('textOutput');
 const hexOutput = document.getElementById('hexOutput');
 const copyTextButton = document.getElementById('copyTextButton');
 const copyHexButton = document.getElementById('copyHexButton');
+const candidatesSection = document.getElementById('candidatesSection');
+const candidatesList = document.getElementById('candidatesList');
+const decodedTextSection = document.getElementById('decodedTextSection');
+const hexViewSection = document.getElementById('hexViewSection');
+const currentParamsInfo = document.getElementById('currentParamsInfo');
+const currentParamsText = document.getElementById('currentParamsText');
 
 // Display limits
 const DISPLAY_BYTE_LIMIT = 1000; // Maximum bytes/characters to display initially
@@ -103,6 +110,10 @@ function clearOutputs() {
   hexOutput.textContent = '';
   fullDecodedText = '';
   fullDecodedHex = '';
+  candidatesSection.style.display = 'none';
+  candidatesList.innerHTML = '';
+  decodedTextSection.style.display = 'none';
+  hexViewSection.style.display = 'none';
 }
 
 function ensureAtLeastOneChannel() {
@@ -240,6 +251,10 @@ function handleDecodeClick() {
       hexOutput.textContent = formattedHex;
     }
 
+    // Show results sections
+    decodedTextSection.style.display = 'flex';
+    hexViewSection.style.display = 'flex';
+
     const bitsUsed =
       currentImageData.width *
       currentImageData.height *
@@ -259,120 +274,81 @@ function handleDecodeClick() {
   }
 }
 
-async function handleAutoDetectClick() {
-  setStatus('');
-  clearOutputs();
-
+function applyCandidate(candidate) {
   if (!currentImageData) {
-    setStatus('Load an image first.', true);
+    setStatus('Image data not available.', true);
     return;
   }
 
-  setStatus('Detecting parameters...');
-  autoDetectButton.disabled = true;
-  decodeButton.disabled = true;
-  stopAutoDetectButton.style.display = 'inline-flex';
-  progressContainer.style.display = 'flex';
-  progressBar.style.width = '0%';
-  progressText.textContent = '0%';
+  // Stop auto-detect if it's still running
+  if (autoDetectAbortController) {
+    console.log('Stopping auto-detect from applyCandidate');
+    try {
+      if (!autoDetectAbortController.signal.aborted) {
+        autoDetectAbortController.abort();
+      }
+    } catch (e) {
+      console.warn('Error aborting auto-detect:', e);
+    }
+    autoDetectAbortController = null;
+    if (progressContainer) progressContainer.style.display = 'none';
+    // Restore button to AUTO DECODE
+    if (autoDetectButton) {
+      autoDetectButton.textContent = 'AUTO DECODE';
+      autoDetectButton.className = 'button-primary decode-mode-btn';
+      autoDetectButton.disabled = false;
+    }
+    if (decodeButton) decodeButton.disabled = false;
+  }
+
+  // Apply candidate parameters to form
+  const { bitsPerChannel, useR, useG, useB, order, encoding } = candidate.params;
   
-  // Add updating animation to text outputs
-  textOutput.classList.add('updating');
-  hexOutput.classList.add('updating');
+  bitsPerChannelInput.value = String(bitsPerChannel);
+  channelRInput.checked = useR;
+  channelGInput.checked = useG;
+  channelBInput.checked = useB;
+  
+  // Set pixel order
+  for (const radio of pixelOrderRadios) {
+    radio.checked = radio.value === order;
+  }
+  
+  // Set encoding
+  for (const radio of encodingRadios) {
+    radio.checked = radio.value === encoding;
+  }
+  
+  ensureAtLeastOneChannel();
+  persistSettings();
 
-  // Create AbortController for cancellation
-  autoDetectAbortController = new AbortController();
+  // Expand manual decode options and show selected parameters
+  if (manualDecodeOptions && manualDecodeToggle) {
+    manualDecodeOptions.style.display = 'block';
+    const arrow = manualDecodeToggle.querySelector('.toggle-arrow');
+    if (arrow) {
+      arrow.textContent = '▼';
+    }
+  }
 
+  // Decode again with full data (not just preview)
   try {
-    const t0 = performance.now();
-    const detection = await autoDetectParametersByMaxLength(currentImageData, {
-      bitsPerChannel: [1, 2, 3, 4],
-      quickMode: false,
-      onProgress: (current, total, percentage) => {
-        // Check if aborted during progress update
-        if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
-          return; // Stop updating if aborted
-        }
-        progressBar.style.width = `${percentage}%`;
-        progressText.textContent = `${percentage}%`;
-      },
-      onBestCandidate: (candidate) => {
-        // Update UI with current best candidate
-        if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
-          return; // Stop updating if aborted
-        }
-        
-        const formattedHex = formatBytesAsHex(candidate.result.bytes);
-        const formattedText = candidate.params.encoding === 'ascii'
-          ? formatBytesAsAscii(candidate.result.bytes, candidate.result.hasTail, candidate.result.tailBits || 0)
-          : formatBytesAsUtf8(candidate.result.bytes, candidate.result.hasTail, candidate.result.tailBits || 0);
-        
-        // Store full text and hex
-        fullDecodedText = formattedText;
-        fullDecodedHex = formattedHex;
-        
-        // Display only first DISPLAY_BYTE_LIMIT characters with "show more" link
-        if (formattedText.length > DISPLAY_BYTE_LIMIT) {
-          const truncated = formattedText.substring(0, DISPLAY_BYTE_LIMIT);
-          textOutput.innerHTML = escapeHtml(truncated) + ' <a href="#" class="show-more-link">[show more...]</a>';
-        } else {
-          textOutput.textContent = formattedText;
-        }
-        
-        // Display only first DISPLAY_BYTE_LIMIT bytes in hex with "show more" link
-        if (candidate.result.bytes.length > DISPLAY_BYTE_LIMIT) {
-          const truncatedBytes = candidate.result.bytes.slice(0, DISPLAY_BYTE_LIMIT);
-          const truncatedHex = formatBytesAsHex(truncatedBytes);
-          hexOutput.innerHTML = escapeHtml(truncatedHex) + ' <a href="#" class="show-more-link">[show more...]</a>';
-        } else {
-          hexOutput.textContent = formattedHex;
-        }
-      },
-      abortSignal: autoDetectAbortController.signal,
+    setStatus('Decoding with selected parameters...', false);
+    
+    const result = decodeLSB(currentImageData, {
+      bitsPerChannel,
+      useR,
+      useG,
+      useB,
+      order,
     });
-    const t1 = performance.now();
 
-    // Hide progress bar and stop button
-    progressContainer.style.display = 'none';
-    stopAutoDetectButton.style.display = 'none';
-    
-    // Remove updating animation
-    textOutput.classList.remove('updating');
-    hexOutput.classList.remove('updating');
+    // Format bytes for display based on encoding
+    const formattedText = encoding === 'ascii'
+      ? formatBytesAsAscii(result.bytes, result.hasTail, result.tailBits || 0)
+      : formatBytesAsUtf8(result.bytes, result.hasTail, result.tailBits || 0);
+    const formattedHex = formatBytesAsHex(result.bytes);
 
-    if (!detection.params || !detection.result) {
-      setStatus('Could not detect parameters. Try manual decoding.', true);
-      return;
-    }
-
-    // Apply detected parameters to form
-    const { bitsPerChannel, useR, useG, useB, order, encoding } = detection.params;
-    
-    bitsPerChannelInput.value = String(bitsPerChannel);
-    channelRInput.checked = useR;
-    channelGInput.checked = useG;
-    channelBInput.checked = useB;
-    
-    // Set pixel order
-    for (const radio of pixelOrderRadios) {
-      radio.checked = radio.value === order;
-    }
-    
-    // Set encoding
-    for (const radio of encodingRadios) {
-      radio.checked = radio.value === encoding;
-    }
-    
-    ensureAtLeastOneChannel();
-    persistSettings();
-
-    // Display decoded result
-    const formattedHex = formatBytesAsHex(detection.result.bytes);
-    // Format with tailBits for proper display
-    const formattedText = detection.params.encoding === 'ascii'
-      ? formatBytesAsAscii(detection.result.bytes, detection.result.hasTail, detection.result.tailBits || 0)
-      : formatBytesAsUtf8(detection.result.bytes, detection.result.hasTail, detection.result.tailBits || 0);
-    
     // Store full text and hex
     fullDecodedText = formattedText;
     fullDecodedHex = formattedHex;
@@ -386,49 +362,296 @@ async function handleAutoDetectClick() {
     }
     
     // Display only first DISPLAY_BYTE_LIMIT bytes in hex with "show more" link
-    if (detection.result.bytes.length > DISPLAY_BYTE_LIMIT) {
-      const truncatedBytes = detection.result.bytes.slice(0, DISPLAY_BYTE_LIMIT);
+    if (result.bytes.length > DISPLAY_BYTE_LIMIT) {
+      const truncatedBytes = result.bytes.slice(0, DISPLAY_BYTE_LIMIT);
       const truncatedHex = formatBytesAsHex(truncatedBytes);
       hexOutput.innerHTML = escapeHtml(truncatedHex) + ' <a href="#" class="show-more-link">[show more...]</a>';
     } else {
       hexOutput.textContent = formattedHex;
     }
 
+    // Hide candidates section and show results
+    candidatesSection.style.display = 'none';
+    decodedTextSection.style.display = 'flex';
+    hexViewSection.style.display = 'flex';
+    
     const summary = [
-      `Detected: ${bitsPerChannel} bit(s)/channel`,
-      `${detection.params.useR ? 'R' : ''}${detection.params.useG ? 'G' : ''}${detection.params.useB ? 'B' : ''}`,
+      `${bitsPerChannel} bit(s)/channel`,
+      `${useR ? 'R' : ''}${useG ? 'G' : ''}${useB ? 'B' : ''}`,
       `order: ${order}`,
       `encoding: ${encoding.toUpperCase()}`,
-      `max length: ${detection.maxPrintableLength} bytes`,
-      `~${(t1 - t0).toFixed(1)} ms`,
+      `${result.byteCount} bytes`,
     ];
     setStatus(summary.join(' · '), false);
   } catch (e) {
+    console.error('Decode error', e);
+    setStatus('Failed to decode with selected parameters. See console for details.', true);
+  }
+}
+
+function displayCandidates(candidates) {
+  if (!candidates || candidates.length === 0) {
+    if (candidatesList.innerHTML.includes('Detecting')) {
+      // Still detecting, don't clear
+      return;
+    }
+    candidatesList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">No candidates found yet...</div>';
+    return;
+  }
+
+  // Clear and rebuild list
+  candidatesList.innerHTML = '';
+  
+  candidates.forEach((candidate, index) => {
+    // Use only preview bytes (first 100 bytes) for display
+    const previewBytes = candidate.result.bytes;
+    const formattedText = candidate.params.encoding === 'ascii'
+      ? formatBytesAsAscii(previewBytes, false, 0) // Preview doesn't have tail info
+      : formatBytesAsUtf8(previewBytes, false, 0);
+    
+    const textScore = candidate.textScoreResult?.score ?? 0;
+    const textQuality = calculateTextQualityScore(formattedText, candidate.textScoreResult);
+    const dictionaryScore = candidate.dictionaryScore || 0;
+    const detectedLanguage = candidate.detectedLanguage || null;
+    
+    const item = document.createElement('div');
+    item.className = 'candidate-item';
+    
+    // Preview is already limited to 100 bytes, just clean it up for display
+    const preview = formattedText.replace(/\n/g, ' ').substring(0, 100);
+    const previewText = preview + (previewBytes.length >= 100 ? '...' : '');
+    
+    const channels = `${candidate.params.useR ? 'R' : ''}${candidate.params.useG ? 'G' : ''}${candidate.params.useB ? 'B' : ''}`;
+    
+    item.innerHTML = `
+      <div class="candidate-header">
+        <span class="candidate-rank">#${index + 1}</span>
+        <span class="candidate-params">${candidate.params.bitsPerChannel}bit/${channels} ${candidate.params.order} ${candidate.params.encoding.toUpperCase()}</span>
+        <div class="candidate-scores">
+          ${textScore > 0 ? `<span class="score-badge score-text">Text: ${(textScore * 100).toFixed(0)}%</span>` : ''}
+          ${dictionaryScore > 0 ? `<span class="score-badge score-dict">${detectedLanguage || 'dict'}: ${(dictionaryScore * 100).toFixed(0)}%</span>` : ''}
+          <span class="score-badge score-quality">Quality: ${textQuality.toFixed(0)}</span>
+        </div>
+      </div>
+      <div class="candidate-preview">${escapeHtml(previewText)}</div>
+      <button class="candidate-select-btn" data-index="${index}">Select</button>
+    `;
+    
+    // Add click handler to the entire item
+    item.addEventListener('click', (e) => {
+      // Don't trigger if clicking on the button itself (to avoid double trigger)
+      if (!e.target.classList.contains('candidate-select-btn')) {
+        applyCandidate(candidate);
+      }
+    });
+    
+    // Also keep the button click handler for explicit button clicks
+    const selectBtn = item.querySelector('.candidate-select-btn');
+    selectBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent item click from firing
+      e.preventDefault(); // Prevent any default behavior
+      console.log('Select button clicked, applying candidate');
+      applyCandidate(candidate);
+    });
+    
+    candidatesList.appendChild(item);
+  });
+  
+  const countEl = candidatesSection.querySelector('.candidates-count');
+  if (countEl) {
+    countEl.textContent = `${candidates.length} candidate${candidates.length !== 1 ? 's' : ''}`;
+  }
+  
+  candidatesSection.style.display = 'block';
+}
+
+function calculateTextQualityScore(text, textScoreResult) {
+  if (!text || text.length === 0 || !textScoreResult) {
+    return 0;
+  }
+  
+  let score = (textScoreResult.score || 0) * 70;
+  
+  if (textScoreResult.metrics?.components) {
+    const comp = textScoreResult.metrics.components;
+    score += comp.ctrlScore * 10;
+    score += comp.compScore * 5;
+    score += comp.entScore * 5;
+  }
+  
+  const sample = text.substring(0, Math.min(200, text.length));
+  const letterCount = (sample.match(/[a-zA-Zа-яА-Я]/g) || []).length;
+  const letterRatio = letterCount / sample.length;
+  
+  if (letterRatio >= 0.3 && letterRatio <= 0.8) {
+    score += 10;
+  } else if (letterRatio < 0.1) {
+    score -= 10;
+  }
+  
+  if (sample.includes(' ') || sample.includes('\n') || sample.includes('\t')) {
+    score += 5;
+  }
+  
+  const specialCharCount = (sample.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/g) || []).length;
+  const specialCharRatio = specialCharCount / sample.length;
+  if (specialCharRatio > 0.3) {
+    score -= 10;
+  }
+  
+  return Math.max(0, Math.min(100, score));
+}
+
+async function handleAutoDetectClick() {
+  // If auto-detect is already running (button shows STOP), stop it
+  if (autoDetectButton.textContent === 'STOP' && autoDetectAbortController) {
+    console.log('Stopping auto-detect from button click');
+    if (!autoDetectAbortController.signal.aborted) {
+      autoDetectAbortController.abort();
+    }
+    autoDetectAbortController = null;
+    progressContainer.style.display = 'none';
+    // Restore button to AUTO DECODE
+    autoDetectButton.textContent = 'AUTO DECODE';
+    autoDetectButton.className = 'button-primary decode-mode-btn';
+    autoDetectButton.disabled = false;
+    decodeButton.disabled = false;
+    
+    // Hide current params info
+    if (currentParamsInfo) currentParamsInfo.style.display = 'none';
+    
+    // Show manual decode button again
+    if (manualDecodeToggle) manualDecodeToggle.style.display = 'inline-flex';
+    
+    // Don't clear candidates - keep them visible
+    setStatus('Auto-detect stopped by user.', false);
+    return;
+  }
+
+  setStatus('');
+  // Clear only text/hex outputs, not candidates
+  textOutput.textContent = '';
+  hexOutput.textContent = '';
+  fullDecodedText = '';
+  fullDecodedHex = '';
+  decodedTextSection.style.display = 'none';
+  hexViewSection.style.display = 'none';
+
+  if (!currentImageData) {
+    setStatus('Load an image first.', true);
+    return;
+  }
+
+  // Change button to STOP (red)
+  autoDetectButton.textContent = 'STOP';
+  autoDetectButton.className = 'button-stop decode-mode-btn';
+  autoDetectButton.disabled = false; // Keep enabled so user can click STOP
+
+  // Hide manual decode button and options
+  if (manualDecodeToggle) manualDecodeToggle.style.display = 'none';
+  if (manualDecodeOptions) manualDecodeOptions.style.display = 'none';
+
+  setStatus('Detecting parameters...');
+  decodeButton.disabled = true;
+  progressContainer.style.display = 'flex';
+  progressBar.style.width = '0%';
+  progressText.textContent = '0%';
+
+  // Show candidates section immediately
+  candidatesSection.style.display = 'block';
+  // Only clear if empty, otherwise keep existing candidates
+  if (candidatesList.innerHTML === '' || candidatesList.innerHTML.includes('Detecting')) {
+    candidatesList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Detecting candidates...</div>';
+  }
+
+  // Show current params info
+  if (currentParamsInfo) currentParamsInfo.style.display = 'block';
+  if (currentParamsText) currentParamsText.textContent = 'Starting detection...';
+
+  // Create AbortController for cancellation
+  autoDetectAbortController = new AbortController();
+
+  try {
+    const t0 = performance.now();
+    const detection = await autoDetectParametersByMaxLength(currentImageData, {
+      bitsPerChannel: [1, 2, 3, 4],
+      quickMode: false,
+      onProgress: (current, total, percentage) => {
+        if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
+          return;
+        }
+        progressBar.style.width = `${percentage}%`;
+        progressText.textContent = `${percentage}%`;
+      },
+      onCurrentParams: (params) => {
+        if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
+          return;
+        }
+        if (currentParamsText) {
+          currentParamsText.textContent = `Testing: ${params.bitsPerChannel}bit/${params.channels} ${params.order} ${params.encoding.toUpperCase()} (${params.current}/${params.total})`;
+        }
+      },
+      onCandidate: (sortedCandidates) => {
+        // Update candidates list in real-time
+        if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
+          return;
+        }
+        displayCandidates(sortedCandidates);
+      },
+      abortSignal: autoDetectAbortController.signal,
+    });
+    const t1 = performance.now();
+
+    // Hide progress bar and restore button
+    progressContainer.style.display = 'none';
+    autoDetectAbortController = null; // Clear abort controller after completion
+    autoDetectButton.textContent = 'AUTO DECODE';
+    autoDetectButton.className = 'button-primary decode-mode-btn';
+    
+    // Hide current params info
+    if (currentParamsInfo) currentParamsInfo.style.display = 'none';
+    
+    // Show manual decode button again
+    if (manualDecodeToggle) manualDecodeToggle.style.display = 'inline-flex';
+
+    if (!detection.candidates || detection.candidates.length === 0) {
+      setStatus('Could not detect parameters. Try manual decoding.', true);
+      if (candidatesList.innerHTML.includes('Detecting')) {
+        candidatesSection.style.display = 'none';
+      }
+      return;
+    }
+
+    // Final update of candidates list (in case onCandidate wasn't called for all)
+    displayCandidates(detection.candidates);
+    
+    setStatus(`Found ${detection.candidates.length} candidate(s) in ~${(t1 - t0).toFixed(0)}ms. Select one to view details.`, false);
+  } catch (e) {
     if (e.name === 'AbortError') {
       setStatus('Auto-detect stopped by user.', false);
+      // Don't clear candidates - keep them visible
     } else {
       console.error('Auto-detect error', e);
       setStatus('Auto-detect failed. See console for details.', true);
     }
     progressContainer.style.display = 'none';
-    stopAutoDetectButton.style.display = 'none';
+    // Restore button to AUTO DECODE
+    autoDetectButton.textContent = 'AUTO DECODE';
+    autoDetectButton.className = 'button-primary decode-mode-btn';
     autoDetectAbortController = null;
     
-    // Remove updating animation
-    textOutput.classList.remove('updating');
-    hexOutput.classList.remove('updating');
+    // Hide current params info
+    if (currentParamsInfo) currentParamsInfo.style.display = 'none';
+    
+    // Show manual decode button again
+    if (manualDecodeToggle) manualDecodeToggle.style.display = 'inline-flex';
+    // Don't hide candidates section - keep found candidates visible
   } finally {
     autoDetectButton.disabled = false;
     decodeButton.disabled = false;
   }
 }
 
-function handleStopAutoDetectClick() {
-  if (autoDetectAbortController) {
-    autoDetectAbortController.abort();
-    autoDetectAbortController = null;
-  }
-}
 
 function handleFile(file) {
   if (!file) return;
@@ -584,8 +807,19 @@ function init() {
 
   decodeButton.addEventListener('click', handleDecodeClick);
   autoDetectButton.addEventListener('click', handleAutoDetectClick);
-  stopAutoDetectButton.addEventListener('click', handleStopAutoDetectClick);
   bitsPerChannelInput.addEventListener('blur', onBitsPerChannelBlur);
+  
+  // Toggle manual decode options
+  if (manualDecodeToggle && manualDecodeOptions) {
+    manualDecodeToggle.addEventListener('click', () => {
+      const isVisible = manualDecodeOptions.style.display !== 'none';
+      manualDecodeOptions.style.display = isVisible ? 'none' : 'block';
+      const arrow = manualDecodeToggle.querySelector('.toggle-arrow');
+      if (arrow) {
+        arrow.textContent = isVisible ? '▶' : '▼';
+      }
+    });
+  }
 
   channelRInput.addEventListener('change', () => {
     ensureAtLeastOneChannel();
