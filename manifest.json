@@ -3,8 +3,20 @@
   "name": "LSB Image Steganography Decoder",
   "version": "0.1.0",
   "description": "Decode hidden messages from images using configurable LSB steganography parameters.",
+  "icons": {
+    "16": "icons/16x16.png",
+    "48": "icons/48x48.png",
+    "64": "icons/64x64.png",
+    "96": "icons/96x96.png",
+    "128": "icons/128x128.png"
+  },
   "action": {
-    "default_title": "Open LSB Decoder"
+    "default_title": "Open LSB Decoder",
+    "default_icon": {
+      "16": "icons/16x16.png",
+      "48": "icons/48x48.png",
+      "128": "icons/128x128.png"
+    }
   },
   "background": {
     "service_worker": "background.js",
