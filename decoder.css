@@ -56,33 +56,46 @@ body {
 }
 
 .tabs {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  border-bottom: 1px solid var(--border-subtle);
+  display: inline-flex;
+  gap: 0;
+  margin-top: 14px;
+  border-bottom: none;
+  background: rgba(2, 6, 23, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 4px;
+  position: relative;
 }
 
 .tab-button {
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
-  padding: 8px 16px;
+  padding: 10px 32px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
   box-shadow: none;
-  border-radius: 0;
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.3px;
 }
 
-.tab-button:hover {
+.tab-button:hover:not(.active) {
   color: var(--text);
+  background: rgba(148, 163, 184, 0.08);
 }
 
 .tab-button.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: #fff;
+  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
+  box-shadow:
+    0 0 20px rgba(56, 189, 248, 0.4),
+    0 0 60px rgba(56, 189, 248, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
 }
 
 .app-main {
