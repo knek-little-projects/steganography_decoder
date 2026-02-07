@@ -559,6 +559,12 @@ button:disabled {
   flex-direction: column;
 }
 
+.candidates-section .results-header h3 {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text-primary, #ffffff);
+}
+
 .candidates-list {
   display: flex;
   flex-direction: column;
