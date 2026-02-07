@@ -685,6 +685,15 @@ function handleFile(file) {
           setImageForEncode(currentImageData);
         }
         setStatus('Image loaded. Ready to decode.');
+        
+        // Auto-start autodecode if we're on the Decode tab
+        const decodePanel = document.getElementById('decodePanel');
+        if (decodePanel && decodePanel.style.display !== 'none') {
+          // Use setTimeout to ensure image is fully loaded before starting autodecode
+          setTimeout(() => {
+            handleAutoDetectClick();
+          }, 100);
+        }
       } catch (e) {
         console.error('Canvas decode error', e);
         currentImageData = null;
