@@ -574,17 +574,80 @@ button:disabled {
 }
 
 .candidate-item {
+  position: relative;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   background: rgba(15, 23, 42, 0.5);
   padding: 12px;
+  padding-right: 36px;
   transition: all 0.2s ease;
   cursor: pointer;
+}
+
+/* Arrow hint on hover */
+.candidate-item::after {
+  content: '→';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.candidate-item:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(3px);
 }
 
 .candidate-item:hover {
   background: rgba(15, 23, 42, 0.8);
   border-color: var(--accent);
+}
+
+/* Medal system — gold for #1 */
+.candidate-item.candidate-gold {
+  border-color: #fbbf24;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.15);
+}
+.candidate-item.candidate-gold:hover {
+  border-color: #fbbf24;
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.3);
+}
+
+/* Silver for #2 */
+.candidate-item.candidate-silver {
+  border-color: #94a3b8;
+  box-shadow: 0 0 8px rgba(148, 163, 184, 0.1);
+}
+.candidate-item.candidate-silver:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 0 14px rgba(148, 163, 184, 0.2);
+}
+
+/* Bronze for #3 */
+.candidate-item.candidate-bronze {
+  border-color: #b45309;
+  box-shadow: 0 0 8px rgba(180, 83, 9, 0.1);
+}
+.candidate-item.candidate-bronze:hover {
+  border-color: #b45309;
+  box-shadow: 0 0 14px rgba(180, 83, 9, 0.2);
+}
+
+/* Best match badge */
+.best-match-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .candidate-header {
@@ -648,34 +711,11 @@ button:disabled {
   background: rgba(2, 6, 23, 0.5);
   padding: 8px;
   border-radius: var(--radius-md);
-  margin-bottom: 8px;
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 80px;
   overflow: hidden;
   line-height: 1.4;
-}
-
-.candidate-select-btn {
-  width: 100%;
-  padding: 6px 12px;
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.candidate-select-btn:hover {
-  background: #0ea5e9;
-  transform: translateY(-1px);
-}
-
-.candidate-select-btn:active {
-  transform: translateY(0);
 }
 
 .candidates-count {

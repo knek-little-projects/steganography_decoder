@@ -416,6 +416,10 @@ function displayCandidates(candidates) {
     
     const item = document.createElement('div');
     item.className = 'candidate-item';
+    // Add medal class for top-3 candidates
+    if (index === 0) item.classList.add('candidate-gold');
+    else if (index === 1) item.classList.add('candidate-silver');
+    else if (index === 2) item.classList.add('candidate-bronze');
     
     // Preview is already limited to 100 bytes, just clean it up for display
     const preview = formattedText.replace(/\n/g, ' ').substring(0, 100);
@@ -423,9 +427,14 @@ function displayCandidates(candidates) {
     
     const channels = `${candidate.params.useR ? 'R' : ''}${candidate.params.useG ? 'G' : ''}${candidate.params.useB ? 'B' : ''}`;
     
+    // Medal emoji for top-3
+    const medal = index === 0 ? '🏆' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+    const bestBadge = index === 0 ? '<span class="best-match-badge">Best match</span>' : '';
+    
     item.innerHTML = `
       <div class="candidate-header">
-        <span class="candidate-rank">#${index + 1}</span>
+        <span class="candidate-rank">${medal} #${index + 1}</span>
+        ${bestBadge}
         <span class="candidate-params">${candidate.params.bitsPerChannel}bit/${channels} ${candidate.params.order} ${candidate.params.encoding.toUpperCase()}</span>
         <div class="candidate-scores">
           ${textScore > 0 ? `<span class="score-badge score-text">Text: ${(textScore * 100).toFixed(0)}%</span>` : ''}
@@ -434,23 +443,10 @@ function displayCandidates(candidates) {
         </div>
       </div>
       <div class="candidate-preview">${escapeHtml(previewText)}</div>
-      <button class="candidate-select-btn" data-index="${index}">Select</button>
     `;
     
-    // Add click handler to the entire item
-    item.addEventListener('click', (e) => {
-      // Don't trigger if clicking on the button itself (to avoid double trigger)
-      if (!e.target.classList.contains('candidate-select-btn')) {
-        applyCandidate(candidate);
-      }
-    });
-    
-    // Also keep the button click handler for explicit button clicks
-    const selectBtn = item.querySelector('.candidate-select-btn');
-    selectBtn.addEventListener('click', (e) => {
-      e.stopPropagation(); // Prevent item click from firing
-      e.preventDefault(); // Prevent any default behavior
-      console.log('Select button clicked, applying candidate');
+    // Click the whole card to apply
+    item.addEventListener('click', () => {
       applyCandidate(candidate);
     });
     
