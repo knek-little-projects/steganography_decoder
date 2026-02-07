@@ -112,6 +112,7 @@ body {
   flex: 1.3;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 /* When no image is selected, stretch the upload area and hide preview/metadata */
@@ -460,9 +461,11 @@ button:disabled {
 
 .results-section {
   margin-top: 12px;
+  margin-bottom: 12px;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  flex-shrink: 0;
 }
 
 .results-header {
@@ -495,6 +498,7 @@ button:disabled {
   color: var(--text);
   padding: 8px 10px;
   width: 100%;
+  box-sizing: border-box;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
