@@ -1,0 +1,82 @@
+Steganography Decoder & Encoder
+
+Use LSB image steganography decoder & encoder app to embed or extract metadata from image, decrypt steganography in png, bmp, jpg
+
+Need to extract secret messages hidden inside images that look completely normal and the hidden content isn't visible? This lsb steganography decoder & encoder app helps you decode image steganography in seconds, right in your browser. It works as an image steganography decoder for png/bmp/jpg/jpeg, so you can extract metadata and hidden steganographic messages from screenshots, memes, or test images without installing heavy steganography tools. Additionally, you can embed invisible secret data inside an image.
+
+✅ What you can do
+• extract metadata from image
+• reveal images within images
+• decrypt steganography from media files
+• decode steganography in different formats
+• extract concealed information from pixels
+• embed secret steganographic messages back
+• hide text in pictures with LSB steganografie
+• encode message in media file for private sharing
+
+📌 Supported formats include
+- png stegano decoder
+- bmp stegano decoder
+- jpg/jpeg stegano decoder
+
+How to decode (quick guide)
+1️⃣ Drop a PNG/BMP/JPG/JPEG into the steganografie decoder
+2️⃣ It automatically parses photos, extracts metadata and decrypts stegonography
+3️⃣ If needed, run again after saving a clean copy
+
+How to encode (quick guide)
+1️⃣ Type your text or paste data
+2️⃣ Choose a PNG or BMP picture
+3️⃣ Click embed and save your new file
+4️⃣ Send it like a normal picture
+
+🧩 Who this is for
+▸ students learning steganography decode and LSB basics
+▸ creators who want to hide message in png/bmp/jpg/jpeg
+▸ developers testing an image steganography tool quickly
+▸ CTF players who need to decrypt steganography hints
+▸ steganografie enthusiasts
+
+Why people use this steganography software
+➤ quick checks in chats, forums, or research
+➤ a clean stegano tool that stays lightweight
+➤ a handy steganographic decoder and encoder combo
+➤ useful when you must extract secrets and validate files
+
+💡 How LSB (Least Significant Bit) steganografie works
+LSB modifies the least significant bits of pixel color values to embed secret payload. Since these bits have minimal visual impact, the photo looks unchanged to the human eye. Our steg tool processes files pixel by pixel, reading or writing data in the RGB channels' least significant bits. This method is particularly effective with PNG and BMP formats because they use lossless compression, preserving the exact pixel values needed for reliable stegnography encoding and decoding. 
+
+🔒 Privacy mindset
+Steganography Decoder & Encoder extension doesn't share, save or send any of your data anywhere.
+
+📌 Supported methods
+
+1. steganography decoder png
+2. bmp stegano decoder for bitmap
+3. lsb stegano decoder logic for stable, repeatable output
+4. lsb stegano png use cases for screenshots and icons
+5. steganographic jpg/jpeg support
+
+🛠️ Troubleshooting
+
+* use original PNG/BMP when possible (recompression can break steganography image decoder)
+* if decoding fails, try another copy of the same file
+* keep messages small for stable LSB encoding
+* avoid converting PNG to JPG before you decrypt stego
+* compare outputs when you decode steganographic png after exporting
+
+⚡ Performance and limitations
+The extension processes files entirely in your browser using Web APIs, ensuring your files never leave your device. This local processing means no upload delays, no server dependencies, and complete privacy. Processing speed depends on file size—small icons decode in milliseconds, while high-resolution photos may take a few seconds. The LSB method has a capacity limit: you can typically embed about 1 byte of data per 8 pixels in an uncompressed photo. For best results, use uncompressed media formats and keep embedded messages concise. Remember that JPG files use lossy compression, which may corrupt steganographic content, so they're better suited for decoding existing steganografie rather than encoding new messages.
+
+FAQ
+Q: What formats does this steganografie tool support?
+A: We support png, bmp, jpeg, jpg. New formats may be added in the future.
+
+Q: Which method does extention use?
+A: It behaves as an lsb steganografie decoder
+
+Q: Is it online or offline?
+A: It doesn't require connection so it can be used both ways
+
+Q: Can it help me decode hidden message text?
+A: Yes, drop the file into the extention and it will extract concealed information if it is available.
