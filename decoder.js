@@ -624,88 +624,6 @@ async function handleAutoDetectClick() {
 }
 
 
-async function handleImageUrl(imageUrl) {
-  if (!imageUrl) return;
-  clearOutputs();
-  setStatus('Loading image from URL...');
-
-  try {
-    // Fetch the image
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const blob = await response.blob();
-    
-    // Create a File object from the blob for metadata
-    const fileName = imageUrl.split('/').pop() || 'image.jpg';
-    const file = new File([blob], fileName, { type: blob.type });
-    currentFile = file;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const url = event.target && event.target.result;
-      if (!url) {
-        setStatus('Unable to read file.', true);
-        return;
-      }
-
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-          currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-          imagePreview.src = url;
-          imagePreview.style.display = 'block';
-          updateMetadata(file, currentImageData);
-          updateImageUI(true);
-          // Notify encoder about new image
-          if (typeof setImageForEncode === 'function') {
-            setImageForEncode(currentImageData);
-          }
-          setStatus('Image loaded. Ready to decode.');
-          
-          // Auto-start autodecode if we're on the Decode tab
-          const decodePanel = document.getElementById('decodePanel');
-          if (decodePanel && decodePanel.style.display !== 'none') {
-            // Use setTimeout to ensure image is fully loaded before starting autodecode
-            setTimeout(() => {
-              handleAutoDetectClick();
-            }, 100);
-          }
-        } catch (e) {
-          console.error('Canvas decode error', e);
-          currentImageData = null;
-          imagePreview.removeAttribute('src');
-          updateMetadata(null, null);
-          updateImageUI(false);
-          setStatus('Failed to read pixels from image.', true);
-        }
-      };
-      img.onerror = () => {
-        currentImageData = null;
-        imagePreview.removeAttribute('src');
-        updateMetadata(null, null);
-        updateImageUI(false);
-        setStatus('Failed to load image. CORS may be blocking the request.', true);
-      };
-      img.src = url;
-    };
-    reader.onerror = () => {
-      setStatus('File read error.', true);
-    };
-    reader.readAsDataURL(blob);
-  } catch (e) {
-    console.error('Error loading image from URL:', e);
-    setStatus('Failed to load image from URL. ' + e.message, true);
-  }
-}
-
 function handleFile(file) {
   if (!file) return;
   currentFile = file;
@@ -859,13 +777,6 @@ function init() {
   ensureAtLeastOneChannel();
   initTabs();
   updateImageUI(false);
-
-  // Check if imageUrl parameter is present in URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const imageUrl = urlParams.get('imageUrl');
-  if (imageUrl) {
-    handleImageUrl(decodeURIComponent(imageUrl));
-  }
 
   fileInput.addEventListener('change', handleFileInputChange);
 
