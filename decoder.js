@@ -49,7 +49,6 @@ const ctx = canvas.getContext('2d', { willReadFrequently: true });
 let currentFile = null;
 let currentImageData = null;
 
-const STORAGE_KEY = 'lsb_decoder_settings_v1';
 
 function updateImageUI(hasImage) {
   if (!panelLeft) return;
@@ -172,27 +171,6 @@ function applySettingsToForm(settings) {
   ensureAtLeastOneChannel();
 }
 
-function persistSettings() {
-  const settings = readSettingsFromForm();
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-    chrome.storage.local.set({ [STORAGE_KEY]: settings });
-  }
-}
-
-function restoreSettings() {
-  if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
-    ensureAtLeastOneChannel();
-    return;
-  }
-  chrome.storage.local.get(STORAGE_KEY, (result) => {
-    if (chrome.runtime && chrome.runtime.lastError) {
-      ensureAtLeastOneChannel();
-      return;
-    }
-    const settings = result[STORAGE_KEY];
-    applySettingsToForm(settings);
-  });
-}
 
 function handleDecodeClick() {
   setStatus('');
@@ -210,8 +188,6 @@ function handleDecodeClick() {
     setStatus('Select at least one channel (R, G or B).', true);
     return;
   }
-
-  persistSettings();
 
   try {
     const t0 = performance.now();
@@ -320,7 +296,6 @@ function applyCandidate(candidate) {
   }
   
   ensureAtLeastOneChannel();
-  persistSettings();
 
   // Expand manual decode options and show selected parameters
   if (manualDecodeOptions && manualDecodeToggle) {
@@ -881,7 +856,6 @@ function initTabs() {
 }
 
 function init() {
-  restoreSettings();
   ensureAtLeastOneChannel();
   initTabs();
   updateImageUI(false);
@@ -917,22 +891,12 @@ function init() {
 
   channelRInput.addEventListener('change', () => {
     ensureAtLeastOneChannel();
-    persistSettings();
   });
   channelGInput.addEventListener('change', () => {
     ensureAtLeastOneChannel();
-    persistSettings();
   });
   channelBInput.addEventListener('change', () => {
     ensureAtLeastOneChannel();
-    persistSettings();
-  });
-
-  encodingRadios.forEach((radio) => {
-    radio.addEventListener('change', persistSettings);
-  });
-  pixelOrderRadios.forEach((radio) => {
-    radio.addEventListener('change', persistSettings);
   });
 
   copyTextButton.addEventListener('click', () =>
