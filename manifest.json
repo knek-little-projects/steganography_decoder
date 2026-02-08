@@ -23,12 +23,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": [
-    "contextMenus"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ]
+  "permissions": []
 }
 
 
