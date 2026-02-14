@@ -1,0 +1,96 @@
+Steganografie Decoder & Encoder
+
+Dieses LSB-Steganografie-Tool kann versteckte Daten in PNG, BMP, JPG und JPEG Bildern auslesen und einbetten – direkt im Browser.
+
+Du willst eine geheime Nachricht aus einem Bild holen, das völlig normal aussieht? Dieser Decoder checkt die Datei schnell, liest Metadaten aus und findet versteckten Steganografie-Content – ganz ohne schwere Programme. Und wenn du willst, hilft dir das Tool auch dabei, Text oder Daten so im Bild zu verstecken, dass es nach außen praktisch gleich aussieht.
+
+✅ Was es kann
+
+* Metadaten aus Bildern auslesen
+* Bilder finden, die in anderen Bildern versteckt sind
+* Versteckte Daten aus Mediendateien auslesen/entschlüsseln
+* Steganografie in verschiedenen Formaten dekodieren
+* Versteckte Infos direkt aus Pixeln holen
+* Geheime Nachrichten wieder ins Bild einbetten
+* Text in Bildern per LSB-Steganografie verstecken
+* Nachrichten in eine Datei packen für private Weitergabe
+
+📌 Unterstützte Formate
+
+* PNG
+* BMP
+* JPG / JPEG
+
+So dekodierst du
+
+1️⃣ PNG/BMP/JPG/JPEG in den Decoder ziehen (Drag & Drop)  
+2️⃣ Das Tool analysiert das Bild automatisch, liest Metadaten und versucht die versteckten Daten auszulesen  
+3️⃣ Wenn nichts rauskommt: probier’s nochmal mit einer anderen Kopie derselben Datei oder speichere eine „saubere“ Kopie neu (ohne erneutes Komprimieren)
+
+So kodierst du
+
+1️⃣ Tab [Encode] öffnen  
+2️⃣ PNG oder BMP auswählen  
+3️⃣ Text eingeben oder Daten einfügen  
+4️⃣ [Encode] klicken und die neue Datei speichern
+
+🧩 Für wen das ist
+
+* Creator, die unauffällig Nachrichten in PNG/BMP/JPG/JPEG verstecken wollen
+* Studierende, die Steganografie und LSB lernen
+* Entwickler, die Steganografie schnell testen müssen
+* CTF-Spieler, die versteckte Hinweise suchen
+* Steganografie- und Krypto-Enthusiasten
+
+Warum Leute dieses Tool nutzen
+
+* schnell ein Bild aus Chat, Forum oder Aufgabe checken
+* leichtgewichtiges Tool ohne „Ballast“
+* Decoder und Encoder in einem
+* hilft, Verstecktes zu finden und zu prüfen, ob eine Datei „clean“ ist oder ob alles korrekt eingebettet wurde
+
+💡 Wie LSB-Steganografie funktioniert (Least Significant Bit)
+
+LSB verändert die kleinsten (niedrigstwertigen) Bits in den Farbwerten der Pixel und versteckt so die „Payload“. Diese Änderungen sind fürs Auge fast unsichtbar – das Bild sieht meistens genauso aus wie vorher.
+
+Das Tool geht Pixel für Pixel durch und liest/schreibt Daten in die niedrigstwertigen Bits der RGB-Kanäle. Am besten klappt das mit PNG und BMP: Das sind verlustfreie Formate und behalten exakte Pixelwerte – wichtig für zuverlässiges Kodieren und Auslesen.
+
+🔒 Privatsphäre
+
+Das Tool lädt nichts hoch, speichert nichts und schickt nichts irgendwohin: Alles passiert lokal in deinem Browser.
+
+📌 Unterstützte Methoden
+
+1. Steganografie-Decoding in PNG
+2. Steganografie-Decoding in BMP
+3. LSB-Logik für stabile, reproduzierbare Ergebnisse
+4. LSB-Szenarien für PNG (Screenshots, Icons usw.)
+5. JPG/JPEG Support (hauptsächlich fürs Auslesen)
+
+🛠️ Wenn was nicht klappt
+
+* wenn möglich: originales PNG/BMP verwenden (Rekomprimieren killt das Auslesen oft)
+* wenn Decoding fehlschlägt: probier eine andere Kopie derselben Datei
+* Nachrichten kürzer halten – das ist bei LSB-Encoding meist zuverlässiger
+* PNG nicht erst in JPG umwandeln, bevor du Daten extrahieren willst
+* wenn du PNG nach Export/Neu-Speichern dekodierst: Ergebnisse zwischen verschiedenen Versionen vergleichen
+
+⚡ Speed und Grenzen
+
+Alles läuft direkt im Browser – keine Uploads, kein Server, keine Abhängigkeit von externen Services. Die Geschwindigkeit hängt von der Bildgröße ab: kleine Icons sind fast sofort fertig, große Fotos können ein paar Sekunden dauern.
+
+LSB hat eine Kapazitätsgrenze: meist ungefähr 1 Byte pro 8 Pixel in einem unkomprimierten Bild. Für beste Ergebnisse nimm verlustfreie Formate und mach die Nachricht nicht zu lang. Und wichtig: JPG ist verlustbehaftet – das kann versteckte Daten beschädigen. Deshalb ist JPG oft eher okay, um vorhandene Steganografie zu versuchen auszulesen, als um neue zu erstellen.
+
+FAQ
+
+Q: Welche Formate werden unterstützt?  
+A: PNG, BMP, JPG und JPEG. Später vielleicht mehr.
+
+Q: Welche Methode wird verwendet?  
+A: LSB-Steganografie (Auslesen und Einbetten über die niedrigstwertigen Bits).
+
+Q: Online oder offline?  
+A: Beides. Du brauchst keine Internetverbindung.
+
+Q: Kann es versteckte Textnachrichten auslesen?  
+A: Ja – einfach das Bild reinziehen. Wenn etwas versteckt ist, wird es angezeigt.

@@ -1,0 +1,97 @@
+Steganography Decoder & Encoder
+
+Decode and encode LSB image steganography to extract or embed hidden data in images. Works with PNG, BMP, JPG, and JPEG—directly in your browser.
+
+Looking for secret messages hidden inside images that appear completely normal? This LSB steganography decoder and encoder helps you uncover hidden content in seconds, without installing heavy tools. Upload a PNG/BMP/JPG/JPEG to extract metadata and steganographic messages from screenshots, memes, test images, and more. You can also embed invisible data into an image for private sharing.
+
+✅ What you can do
+
+* Extract image metadata
+* Reveal images hidden inside other images
+* Decode and decrypt steganographic content from media files
+* Recover concealed information from pixel data
+* Embed secret steganographic messages into images
+* Hide text in pictures using LSB steganography
+* Encode messages into media files for private sharing
+
+📌 Supported formats
+
+* PNG steganography decoder
+* BMP steganography decoder
+* JPG/JPEG steganography decoder
+
+How to decode (quick guide)
+
+1️⃣ Drop a PNG/BMP/JPG/JPEG into the decoder
+2️⃣ The tool scans the image, extracts metadata, and attempts to recover hidden data automatically
+3️⃣ If nothing shows up, try again with another copy of the same file or a clean re-save
+
+How to encode (quick guide)
+
+1️⃣ Select [Encode] tab
+2️⃣ Choose a PNG or BMP image
+3️⃣ Enter your text (or paste data)
+4️⃣ Click [Encode] and save the new file
+
+🧩 Who this is for
+
+* Students learning LSB and steganography basics
+* Creators who want to hide messages in PNG/BMP/JPG/JPEG
+* Developers who need a fast way to test steganography
+* CTF players extracting hidden hints
+* Steganography enthusiasts
+
+Why people use this tool
+
+* Quick checks in chats, forums, and research
+* Lightweight and easy to use
+* Decoder + encoder in one place
+* Helpful for validating files and recovering hidden content
+
+💡 How LSB (Least Significant Bit) steganography works
+
+LSB steganography hides data by tweaking the least significant bits of pixel color values. These tiny changes are usually invisible, so the image looks the same to the human eye.
+
+This tool reads and writes hidden data by scanning pixels and using the least significant bits in the RGB channels. PNG and BMP are ideal for this because they’re lossless formats, meaning pixel values stay intact—important for reliable encoding and decoding.
+
+🔒 Privacy mindset
+
+Everything runs locally in your browser. The extension does not upload, store, or transmit your files or data.
+
+📌 Supported methods
+
+1. PNG steganography decoding
+2. BMP steganography decoding (bitmap)
+3. LSB decoding logic for consistent, repeatable output
+4. LSB PNG use cases for screenshots and icons
+5. JPG/JPEG support (best for decoding existing steganography)
+
+🛠️ Troubleshooting
+
+* Use the original PNG/BMP when possible—recompression can break decoding
+* If decoding fails, try a different copy of the same image
+* Keep messages short for more reliable LSB encoding
+* Avoid converting PNG to JPG before decoding
+* If you export or re-save the file, compare results across copies
+
+⚡ Performance and limitations
+
+All processing happens on your device using browser Web APIs, so there are no uploads, no waiting on servers, and no privacy trade-offs.
+
+Speed depends on file size: small icons may decode instantly, while large photos can take a few seconds. LSB also has limited capacity—roughly 1 byte per 8 pixels in an uncompressed image.
+
+For best results, use PNG or BMP and keep embedded messages concise. JPG is lossy and can corrupt embedded data, so it’s typically better for decoding content that already exists than for creating new hidden messages.
+
+**FAQ**
+
+Q: What formats are supported?
+A: PNG, BMP, JPG, and JPEG. More formats may be added later.
+
+Q: Which method does the extension use?
+A: LSB steganography for decoding and encoding.
+
+Q: Does it work online or offline?
+A: Both. It doesn’t require an internet connection.
+
+Q: Can it decode hidden text messages?
+A: Yes—drop the image in and it will extract hidden data if it’s present.

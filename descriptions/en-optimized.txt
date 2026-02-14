@@ -68,7 +68,7 @@ Steganography Decoder & Encoder extension doesn't share, save or send any of you
 
 ⚡ Performance and limitations
 
-The extension processes files entirely in your browser using Web APIs, ensuring your files never leave your device. This local processing means no upload delays, no server dependencies, and complete privacy. Processing speed depends on file size—small icons decode in milliseconds, while high-resolution photos may take a few seconds. The LSB method has a capacity limit: you can typically embed about 1 byte of data per 8 pixels in an uncompressed photo. For best results, use uncompressed media formats and keep embedded messages concise. Remember that JPG files use lossy compression, which may corrupt steganographic content, so they're better suited for decoding existing steganografie rather than encoding new messages.
+The extension processes files entirely in your browser, ensuring your files never leave your device. This local processing means no upload delays, no server dependencies, and complete privacy. Processing speed depends on file size—small icons decode in milliseconds, while high-resolution photos may take a few seconds. The LSB method has a capacity limit: you can typically embed about 1 byte of data per 8 pixels in an uncompressed photo. For best results, use uncompressed media formats and keep embedded messages concise. Remember that JPG files use lossy compression, which may corrupt steganographic content, so they're better suited for decoding existing steganografie rather than encoding new messages.
 
 FAQ
 Q: What formats does this steganografie tool support?
