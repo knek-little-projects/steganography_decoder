@@ -4,7 +4,7 @@
  */
 
 import { encodeLSB, decodeLSB, formatBytesAsAscii, formatBytesAsUtf8 } from './lsb.js';
-import { autoDetectParameters, analyzeLSBPatterns } from './autoDetect.js';
+import { autoDetectParameters, autoDetectParametersByMaxLength, analyzeLSBPatterns } from './autoDetect.js';
 import { expect } from 'chai';
 
 // Simple ImageData polyfill for Node.js
@@ -1062,6 +1062,289 @@ describe('LSB Steganography Library', () => {
       
       // This test always passes (it's for exploration)
       expect(results.length).to.be.greaterThan(0);
+    });
+  });
+
+  describe('Zero-byte tail encoding-decoding', () => {
+    it('should encode message with zero-byte tail and rank it in top-10 candidates', async () => {
+      const message = 'hi duddde';
+      const image = createTestImage(30, 30, 128);
+      
+      // Encode with fillWithZeros to create zero-byte tail
+      const encoded = encodeLSB(image, message, {
+        bitsPerChannel: 1,
+        useR: true,
+        useG: true,
+        useB: true,
+        pixelOrder: 'row',
+        encoding: 'utf8',
+        fillWithZeros: true, // This creates zero-byte tail
+      });
+      
+      // Decode to verify the message is correct
+      const decoded = decodeLSB(encoded, {
+        bitsPerChannel: 1,
+        useR: true,
+        useG: true,
+        useB: true,
+        order: 'row',
+      });
+      
+      // Format and verify decoded message
+      const decodedText = formatDecodedText(decoded, 'utf8');
+      // Remove trailing dots/underscores to get the actual message
+      let extractedMessage = decodedText.replace(/[._]+$/, '');
+      if (extractedMessage.length > message.length) {
+        extractedMessage = extractedMessage.substring(0, message.length);
+      }
+      expect(extractedMessage).to.equal(message);
+      
+      // Verify that the decoded bytes have zero bytes after the message
+      // Find where the message ends (first zero byte or end of printable text)
+      let messageEndIndex = 0;
+      for (let i = 0; i < decoded.bytes.length; i++) {
+        const byte = decoded.bytes[i];
+        const isPrintable = (byte >= 0x20 && byte <= 0x7E) || 
+                           byte === 0x0A || byte === 0x0D || byte === 0x09;
+        if (!isPrintable && byte === 0x00) {
+          messageEndIndex = i;
+          break;
+        }
+        if (!isPrintable) {
+          break;
+        }
+        messageEndIndex = i + 1;
+      }
+      
+      // Check if there are zero bytes after the message
+      const bytesAfterMessage = decoded.bytes.slice(messageEndIndex);
+      const hasZeroByteTail = bytesAfterMessage.length > 0 && 
+                             bytesAfterMessage.every(b => b === 0x00);
+      
+      // Now test auto-detection - the correct candidate should be in top-10
+      const detection = await autoDetectParametersByMaxLength(encoded, {
+        bitsPerChannel: [1, 2, 3, 4],
+        quickMode: false,
+      });
+      
+      expect(detection).to.have.property('candidates');
+      expect(detection.candidates).to.be.an('array');
+      expect(detection.candidates.length).to.be.greaterThan(0);
+      
+      // Find the correct candidate in top-10
+      const top10 = detection.candidates.slice(0, 10);
+      let foundCorrect = false;
+      let correctCandidateIndex = -1;
+      
+      for (let i = 0; i < top10.length; i++) {
+        const candidate = top10[i];
+        const candidateText = candidate.result.text.replace(/[._]+$/, '');
+        if (candidateText.substring(0, message.length) === message) {
+          foundCorrect = true;
+          correctCandidateIndex = i;
+          break;
+        }
+      }
+      
+      expect(foundCorrect).to.be.true;
+      expect(correctCandidateIndex).to.be.at.least(0);
+      expect(correctCandidateIndex).to.be.lessThan(10);
+      
+      // Verify the correct candidate has the expected parameters
+      const correctCandidate = top10[correctCandidateIndex];
+      expect(correctCandidate.params.bitsPerChannel).to.equal(1);
+      expect(correctCandidate.params.useR).to.be.true;
+      expect(correctCandidate.params.useG).to.be.true;
+      expect(correctCandidate.params.useB).to.be.true;
+      expect(correctCandidate.params.order).to.equal('row');
+      
+      // If the message has a zero-byte tail, verify that candidates with zero-byte tails
+      // are preferred (ranked higher) when other metrics are similar
+      if (hasZeroByteTail) {
+        // Check if the correct candidate has hasZeroByteTail flag
+        expect(correctCandidate.hasZeroByteTail).to.be.true;
+        
+        // Verify that candidates with zero-byte tails are ranked higher than similar ones without
+        // Look for candidates with similar text scores but different zero-byte tail status
+        const candidatesWithSimilarScore = detection.candidates.filter(c => {
+          const textScore = c.textScoreResult?.score ?? 0;
+          const correctTextScore = correctCandidate.textScoreResult?.score ?? 0;
+          return Math.abs(textScore - correctTextScore) < 0.1;
+        });
+        
+        if (candidatesWithSimilarScore.length > 1) {
+          // Among candidates with similar scores, those with zero-byte tails should rank higher
+          const withZeroTail = candidatesWithSimilarScore.filter(c => c.hasZeroByteTail);
+          const withoutZeroTail = candidatesWithSimilarScore.filter(c => !c.hasZeroByteTail);
+          
+          if (withZeroTail.length > 0 && withoutZeroTail.length > 0) {
+            // Find the highest ranked candidate with zero tail
+            const highestWithZeroTail = Math.min(
+              ...withZeroTail.map(c => detection.candidates.indexOf(c))
+            );
+            // Find the highest ranked candidate without zero tail
+            const highestWithoutZeroTail = Math.min(
+              ...withoutZeroTail.map(c => detection.candidates.indexOf(c))
+            );
+            
+            // Candidates with zero-byte tails should rank higher (lower index = higher rank)
+            expect(highestWithZeroTail).to.be.lessThan(highestWithoutZeroTail);
+          }
+        }
+      }
+    });
+
+    it('should prefer zero-byte tail candidates when encoding with fillWithZeros', async () => {
+      const message = 'test message';
+      const image = createTestImage(25, 25, 128);
+      
+      // Encode with fillWithZeros enabled
+      const encoded = encodeLSB(image, message, {
+        bitsPerChannel: 1,
+        useR: true,
+        useG: true,
+        useB: true,
+        pixelOrder: 'row',
+        encoding: 'utf8',
+        fillWithZeros: true,
+      });
+      
+      // Auto-detect parameters
+      const detection = await autoDetectParametersByMaxLength(encoded, {
+        bitsPerChannel: [1, 2],
+        quickMode: false,
+      });
+      
+      expect(detection.candidates.length).to.be.greaterThan(0);
+      
+      // Find the correct candidate
+      let correctCandidate = null;
+      for (const candidate of detection.candidates) {
+        const candidateText = candidate.result.text.replace(/[._]+$/, '');
+        if (candidateText.substring(0, message.length) === message) {
+          correctCandidate = candidate;
+          break;
+        }
+      }
+      
+      expect(correctCandidate).to.not.be.null;
+      
+      // The correct candidate should have hasZeroByteTail flag
+      expect(correctCandidate.hasZeroByteTail).to.be.true;
+      
+      // Verify it's in the top candidates (within top 10)
+      const correctIndex = detection.candidates.indexOf(correctCandidate);
+      expect(correctIndex).to.be.lessThan(10);
+    });
+
+    it('should rank "hi, duddde" with RB + column + UTF8 in top-10 when encoded with zero-byte tail', async () => {
+      const message = 'hi, duddde';
+      const image = createTestImage(50, 50, 128); // Larger image for more capacity
+      
+      // Encode with the specific parameters: RB + column + UTF8 + fillWithZeros
+      const encoded = encodeLSB(image, message, {
+        bitsPerChannel: 1,
+        useR: true,
+        useG: false,
+        useB: true,
+        pixelOrder: 'column',
+        encoding: 'utf8',
+        fillWithZeros: true, // This creates zero-byte tail
+      });
+      
+      // Decode to verify the message is correct
+      const decoded = decodeLSB(encoded, {
+        bitsPerChannel: 1,
+        useR: true,
+        useG: false,
+        useB: true,
+        order: 'column',
+      });
+      
+      // Format and verify decoded message
+      const decodedText = formatDecodedText(decoded, 'utf8');
+      let extractedMessage = decodedText.replace(/[._]+$/, '');
+      if (extractedMessage.length > message.length) {
+        extractedMessage = extractedMessage.substring(0, message.length);
+      }
+      expect(extractedMessage).to.equal(message);
+      
+      // Now test auto-detection - the correct candidate should be in top-10
+      const detection = await autoDetectParametersByMaxLength(encoded, {
+        bitsPerChannel: [1, 2, 3, 4],
+        quickMode: false,
+      });
+      
+      expect(detection).to.have.property('candidates');
+      expect(detection.candidates).to.be.an('array');
+      expect(detection.candidates.length).to.be.greaterThan(0);
+      
+      // Find the correct candidate in top-10
+      const top10 = detection.candidates.slice(0, 10);
+      let foundCorrect = false;
+      let correctCandidateIndex = -1;
+      let correctCandidate = null;
+      
+      for (let i = 0; i < top10.length; i++) {
+        const candidate = top10[i];
+        const candidateText = candidate.result.text.replace(/[._]+$/, '');
+        // Check if message matches (allowing for slight variations)
+        if (candidateText.substring(0, message.length) === message || 
+            candidateText.includes(message) ||
+            message.includes(candidateText.substring(0, Math.min(message.length, candidateText.length)))) {
+          // Verify it has the correct parameters
+          if (candidate.params.bitsPerChannel === 1 &&
+              candidate.params.useR === true &&
+              candidate.params.useG === false &&
+              candidate.params.useB === true &&
+              candidate.params.order === 'column' &&
+              candidate.params.encoding === 'utf8') {
+            foundCorrect = true;
+            correctCandidateIndex = i;
+            correctCandidate = candidate;
+            break;
+          }
+        }
+      }
+      
+      // If not found in top-10, search in all candidates to see where it is
+      if (!foundCorrect) {
+        for (let i = 0; i < detection.candidates.length; i++) {
+          const candidate = detection.candidates[i];
+          const candidateText = candidate.result.text.replace(/[._]+$/, '');
+          if (candidateText.substring(0, message.length) === message ||
+              candidateText.includes(message)) {
+            if (candidate.params.bitsPerChannel === 1 &&
+                candidate.params.useR === true &&
+                candidate.params.useG === false &&
+                candidate.params.useB === true &&
+                candidate.params.order === 'column' &&
+                candidate.params.encoding === 'utf8') {
+              correctCandidateIndex = i;
+              correctCandidate = candidate;
+              break;
+            }
+          }
+        }
+      }
+      
+      // The correct candidate should be found
+      expect(correctCandidate).to.not.be.null;
+      expect(correctCandidateIndex).to.be.at.least(0);
+      
+      // Verify it's in top-10 (this is the main assertion)
+      expect(correctCandidateIndex).to.be.lessThan(10);
+      
+      // Verify the candidate has zero-byte tail flag
+      expect(correctCandidate.hasZeroByteTail).to.be.true;
+      
+      // Verify parameters
+      expect(correctCandidate.params.bitsPerChannel).to.equal(1);
+      expect(correctCandidate.params.useR).to.be.true;
+      expect(correctCandidate.params.useG).to.be.false;
+      expect(correctCandidate.params.useB).to.be.true;
+      expect(correctCandidate.params.order).to.equal('column');
+      expect(correctCandidate.params.encoding).to.equal('utf8');
     });
   });
 

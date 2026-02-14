@@ -398,6 +398,66 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               text: previewText, // Preview text for sorting
             };
             
+            // Check if message ends with zero bytes (clean message boundary)
+            // This is a good indicator of correct decoding
+            let hasZeroByteTail = false;
+            
+            // Check the full decoded bytes (not just first 1000) to find zero-byte tail
+            // Find where the actual message text ends
+            let messageEndIndex = maxPrintableLength;
+            
+            // If maxPrintableLength stopped at a non-printable byte, check if it's a zero
+            if (maxPrintableLength < bytesToAnalyze.length) {
+              const byteAtEnd = bytesToAnalyze[maxPrintableLength];
+              if (byteAtEnd === 0x00) {
+                messageEndIndex = maxPrintableLength;
+              }
+            }
+            
+            // Check in the full decoded bytes array (up to reasonable limit to avoid performance issues)
+            const CHECK_LIMIT = Math.min(decoded.bytes.length, 5000); // Check up to 5000 bytes
+            const bytesToCheck = decoded.bytes.slice(0, CHECK_LIMIT);
+            
+            if (messageEndIndex < bytesToCheck.length) {
+              const bytesAfterMessage = bytesToCheck.slice(messageEndIndex);
+              if (bytesAfterMessage.length > 0) {
+                // Count zero bytes
+                const zeroBytes = bytesAfterMessage.filter(b => b === 0x00).length;
+                const totalBytes = bytesAfterMessage.length;
+                
+                // If we have a significant number of zero bytes after the message, it's a zero-byte tail
+                // Require at least 5 zero bytes or 70% zeros (whichever is less strict)
+                const minZeros = Math.min(5, Math.ceil(totalBytes * 0.7));
+                if (zeroBytes >= minZeros && zeroBytes >= totalBytes * 0.5) {
+                  hasZeroByteTail = true;
+                }
+              }
+            }
+            
+            // Also check if tail bits are all zeros (this is a strong indicator)
+            if (!hasZeroByteTail && decoded.hasTail && decoded.tailBits === 0) {
+              // If tail bits are zero, check if we're at a clean boundary
+              // Check if there are zero bytes near the end
+              if (decoded.bytes.length > 0) {
+                // Check last few bytes - if they're zeros, it's a good sign
+                const lastBytes = decoded.bytes.slice(Math.max(0, decoded.bytes.length - 10));
+                const zeroCount = lastBytes.filter(b => b === 0x00).length;
+                if (zeroCount >= 3 || (decoded.bytes.length > maxPrintableLength && zeroCount >= 1)) {
+                  hasZeroByteTail = true;
+                }
+              } else {
+                hasZeroByteTail = true;
+              }
+            }
+            
+            // Additional check: if message ends exactly at maxPrintableLength and next bytes are zeros
+            if (!hasZeroByteTail && messageEndIndex === maxPrintableLength && decoded.bytes.length > maxPrintableLength) {
+              const nextBytes = decoded.bytes.slice(maxPrintableLength, Math.min(maxPrintableLength + 20, decoded.bytes.length));
+              if (nextBytes.length > 0 && nextBytes.every(b => b === 0x00)) {
+                hasZeroByteTail = true;
+              }
+            }
+            
             const candidate = {
               params: { bitsPerChannel: bits, ...channels, order, encoding },
               result: previewResult, // Only first 100 bytes
@@ -405,33 +465,77 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
               dictionaryScore,
               detectedLanguage,
               textScoreResult,
+              hasZeroByteTail, // Store whether message ends with zero bytes
+              hasTail: decoded.hasTail,
+              tailBits: decoded.tailBits,
             };
             
             candidates.push(candidate);
             
             // Notify about new candidate (for real-time display)
             if (onCandidate) {
-              // Sort candidates before passing to callback
+              // Sort candidates before passing to callback (use same logic as final sort)
               const sortedCandidates = [...candidates].sort((a, b) => {
+                // Helper function to check if text looks like garbage
+                const isGarbageText = (text) => {
+                  if (!text || text.length < 10) return false;
+                  const sample = text.substring(0, Math.min(200, text.length));
+                  const dotCount = (sample.match(/\./g) || []).length;
+                  const specialCharCount = (sample.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/g) || []).length;
+                  const letterCount = (sample.match(/[a-zA-Zа-яА-Я]/g) || []).length;
+                  const totalChars = sample.length;
+                  const specialRatio = (dotCount + specialCharCount) / totalChars;
+                  const letterRatio = letterCount / totalChars;
+                  return specialRatio > 0.3 || letterRatio < 0.3;
+                };
+                
+                const aIsGarbage = isGarbageText(a.result.text);
+                const bIsGarbage = isGarbageText(b.result.text);
+                if (aIsGarbage && !bIsGarbage) return 1;
+                if (!aIsGarbage && bIsGarbage) return -1;
+                
+                const aQuality = calculateTextQualityScore(a.result.text, a.textScoreResult);
+                const bQuality = calculateTextQualityScore(b.result.text, b.textScoreResult);
+                
                 if (useDictionaries && a.dictionaryScore > 0 && b.dictionaryScore > 0) {
-                  if (Math.abs(a.dictionaryScore - b.dictionaryScore) > 0.01) {
-                    return b.dictionaryScore - a.dictionaryScore;
+                  if (Math.abs(aQuality - bQuality) > 20) {
+                    return bQuality - aQuality;
+                  }
+                  if (aQuality > 20 && bQuality > 20) {
+                    if (Math.abs(a.dictionaryScore - b.dictionaryScore) > 0.01) {
+                      return b.dictionaryScore - a.dictionaryScore;
+                    }
+                  } else {
+                    return bQuality - aQuality;
                   }
                 }
-                const aTextScore = a.textScoreResult?.score ?? 0;
-                const bTextScore = b.textScoreResult?.score ?? 0;
+                
+                if (useDictionaries) {
+                  if (a.dictionaryScore > 0 && b.dictionaryScore === 0 && aQuality > 20) return -1;
+                  if (b.dictionaryScore > 0 && a.dictionaryScore === 0 && bQuality > 20) return 1;
+                }
+                
+                const aTextScore = (a.textScoreResult?.score ?? 0) + (a.hasZeroByteTail ? 0.15 : 0);
+                const bTextScore = (b.textScoreResult?.score ?? 0) + (b.hasZeroByteTail ? 0.15 : 0);
                 const aIsText = aTextScore > 0.5;
                 const bIsText = bTextScore > 0.5;
                 if (aIsText && !bIsText) return -1;
                 if (!aIsText && bIsText) return 1;
-                if (Math.abs(aTextScore - bTextScore) > 0.05) {
-                  return bTextScore - aTextScore;
+                
+                const aTextScoreAdjusted = aIsGarbage ? aTextScore * 0.7 : aTextScore;
+                const bTextScoreAdjusted = bIsGarbage ? bTextScore * 0.7 : bTextScore;
+                if (Math.abs(aTextScoreAdjusted - bTextScoreAdjusted) > 0.03) {
+                  return bTextScoreAdjusted - aTextScoreAdjusted;
                 }
-                const aQuality = calculateTextQualityScore(a.result.text, a.textScoreResult);
-                const bQuality = calculateTextQualityScore(b.result.text, b.textScoreResult);
-                if (Math.abs(aQuality - bQuality) > 1) {
-                  return bQuality - aQuality;
+                
+                const aQualityFinal = aQuality + (a.hasZeroByteTail ? 5 : 0);
+                const bQualityFinal = bQuality + (b.hasZeroByteTail ? 5 : 0);
+                if (Math.abs(aQualityFinal - bQualityFinal) > 1) {
+                  return bQualityFinal - aQualityFinal;
                 }
+                
+                if (a.hasZeroByteTail && !b.hasZeroByteTail) return -1;
+                if (!a.hasZeroByteTail && b.hasZeroByteTail) return 1;
                 return b.maxPrintableLength - a.maxPrintableLength;
               });
               onCandidate(sortedCandidates);
@@ -443,7 +547,8 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
             const currentIsText = currentTextScore > 0.5; // Threshold: score > 0.5 = likely text
             
             // Calculate text quality score using multiple metrics
-            const currentTextQuality = calculateTextQualityScore(formattedText, textScoreResult);
+            // Use dictionaryCheckText which properly handles tail information
+            const currentTextQuality = calculateTextQualityScore(dictionaryCheckText, textScoreResult);
             
             if (useDictionaries && dictionaryScore > 0) {
               // If we have dictionary matches, prefer candidates with higher dictionary scores
@@ -499,32 +604,91 @@ export async function autoDetectParametersByMaxLength(imageData, options = {}) {
   
   // Sort candidates: prioritize dictionary scores, then text detection, then text quality, then max printable length
   candidates.sort((a, b) => {
-    // If both have dictionary scores, sort by dictionary score first
+    // Helper function to check if text looks like garbage (too many special chars, dots, etc.)
+    const isGarbageText = (text) => {
+      if (!text || text.length < 10) return false;
+      const sample = text.substring(0, Math.min(200, text.length));
+      const dotCount = (sample.match(/\./g) || []).length;
+      const specialCharCount = (sample.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/g) || []).length;
+      const letterCount = (sample.match(/[a-zA-Zа-яА-Я]/g) || []).length;
+      const totalChars = sample.length;
+      
+      // If more than 30% are dots or special chars, it's likely garbage
+      const specialRatio = (dotCount + specialCharCount) / totalChars;
+      // If less than 30% are letters, it's likely garbage
+      const letterRatio = letterCount / totalChars;
+      
+      return specialRatio > 0.3 || letterRatio < 0.3;
+    };
+    
+    const aIsGarbage = isGarbageText(a.result.text);
+    const bIsGarbage = isGarbageText(b.result.text);
+    
+    // If one is garbage and the other is not, prefer the non-garbage one
+    if (aIsGarbage && !bIsGarbage) return 1;
+    if (!aIsGarbage && bIsGarbage) return -1;
+    
+    // Calculate text quality scores
+    const aQuality = calculateTextQualityScore(a.result.text, a.textScoreResult);
+    const bQuality = calculateTextQualityScore(b.result.text, b.textScoreResult);
+    
+    // If both have dictionary scores, but one has very low quality, prefer the higher quality one
     if (useDictionaries && a.dictionaryScore > 0 && b.dictionaryScore > 0) {
-      if (Math.abs(a.dictionaryScore - b.dictionaryScore) > 0.01) {
-        return b.dictionaryScore - a.dictionaryScore;
+      // If quality difference is significant (more than 20 points), prefer higher quality
+      if (Math.abs(aQuality - bQuality) > 20) {
+        return bQuality - aQuality;
+      }
+      // Otherwise, use dictionary score but only if both have reasonable quality
+      if (aQuality > 20 && bQuality > 20) {
+        if (Math.abs(a.dictionaryScore - b.dictionaryScore) > 0.01) {
+          return b.dictionaryScore - a.dictionaryScore;
+        }
+      } else {
+        // If one has very low quality, prefer the one with higher quality
+        return bQuality - aQuality;
+      }
+    }
+    
+    // If only one has dictionary score, prefer it only if it has reasonable quality
+    if (useDictionaries) {
+      if (a.dictionaryScore > 0 && b.dictionaryScore === 0 && aQuality > 20) {
+        return -1;
+      }
+      if (b.dictionaryScore > 0 && a.dictionaryScore === 0 && bQuality > 20) {
+        return 1;
       }
     }
     
     // Then prioritize candidates that pass text detection (textScore > 0.5)
-    const aTextScore = a.textScoreResult?.score ?? 0;
-    const bTextScore = b.textScoreResult?.score ?? 0;
+    // Add bonus to textScore for candidates with zero-byte tails (clean boundaries are better)
+    const aTextScore = (a.textScoreResult?.score ?? 0) + (a.hasZeroByteTail ? 0.15 : 0);
+    const bTextScore = (b.textScoreResult?.score ?? 0) + (b.hasZeroByteTail ? 0.15 : 0);
     const aIsText = aTextScore > 0.5;
     const bIsText = bTextScore > 0.5;
     if (aIsText && !bIsText) return -1;
     if (!aIsText && bIsText) return 1;
     
-    // If both are text or both are not, sort by textScore
-    if (Math.abs(aTextScore - bTextScore) > 0.05) {
-      return bTextScore - aTextScore;
+    // If both are text or both are not, sort by textScore (with zero-byte tail bonus)
+    // But penalize garbage text even if it has decent textScore
+    const aTextScoreAdjusted = aIsGarbage ? aTextScore * 0.7 : aTextScore;
+    const bTextScoreAdjusted = bIsGarbage ? bTextScore * 0.7 : bTextScore;
+    if (Math.abs(aTextScoreAdjusted - bTextScoreAdjusted) > 0.03) {
+      return bTextScoreAdjusted - aTextScoreAdjusted;
     }
     
-    // Then by text quality score
-    const aQuality = calculateTextQualityScore(a.result.text, a.textScoreResult);
-    const bQuality = calculateTextQualityScore(b.result.text, b.textScoreResult);
-    if (Math.abs(aQuality - bQuality) > 1) {
-      return bQuality - aQuality;
+    // Then by text quality score (also add bonus for zero-byte tails)
+    // Quality already calculated above, but add zero-byte tail bonus
+    const aQualityFinal = aQuality + (a.hasZeroByteTail ? 5 : 0);
+    const bQualityFinal = bQuality + (b.hasZeroByteTail ? 5 : 0);
+    if (Math.abs(aQualityFinal - bQualityFinal) > 1) {
+      return bQualityFinal - aQualityFinal;
     }
+    
+    // Prefer candidates with zero byte tails (clean message boundaries)
+    // This indicates the message ended cleanly, which is a good sign
+    // This is a strong signal, so use it as a tie-breaker even when scores are very close
+    if (a.hasZeroByteTail && !b.hasZeroByteTail) return -1;
+    if (!a.hasZeroByteTail && b.hasZeroByteTail) return 1;
     
     // Finally by max printable length
     return b.maxPrintableLength - a.maxPrintableLength;
