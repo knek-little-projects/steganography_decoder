@@ -7,7 +7,7 @@ const charCount = document.getElementById('charCount');
 const encodeButton = document.getElementById('encodeButton');
 const encodeStatusLabel = document.getElementById('encodeStatusLabel');
 const encodedCanvas = document.getElementById('encodedCanvas');
-const downloadButton = document.getElementById('downloadButton');
+const encodeDownloadButton = document.getElementById('encodeDownloadButton');
 const capacityInfo = document.getElementById('capacityInfo');
 const capacityText = document.getElementById('capacityText');
 const encodedPreviewSection = document.getElementById('encodedPreviewSection');
@@ -37,9 +37,29 @@ function setEncodeStatus(message, isError = false) {
   encodeStatusLabel.classList.toggle('error', Boolean(isError));
 }
 
+function downloadEncodedImage() {
+  if (!encodedCanvas || !encodedCanvas.width || !encodedCanvas.height) {
+    return;
+  }
+
+  encodedCanvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'encoded-image.png';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
 export function setImageForEncode(imageData) {
   currentImageDataForEncode = imageData;
   updateCapacity();
+  // Hide download button when new image is loaded
+  if (encodeDownloadButton) {
+    encodeDownloadButton.style.display = 'none';
+  }
 }
 
 function updateCapacity() {
@@ -123,8 +143,11 @@ if (encodeButton) {
     if (encodedPreviewSection) {
       encodedPreviewSection.style.display = 'flex';
     }
-    downloadButton.style.display = 'inline-flex';
+    if (encodeDownloadButton) {
+      encodeDownloadButton.style.display = 'inline-flex';
+    }
     setEncodeStatus('Encoded successfully!');
+    downloadEncodedImage();
   } catch (error) {
     setEncodeStatus(error.message, true);
   } finally {
@@ -133,16 +156,9 @@ if (encodeButton) {
   });
 }
 
-if (downloadButton) {
-  downloadButton.addEventListener('click', () => {
-  encodedCanvas.toBlob((blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'encoded-image.png';
-    a.click();
-    URL.revokeObjectURL(url);
-  }, 'image/png');
+if (encodeDownloadButton) {
+  encodeDownloadButton.addEventListener('click', () => {
+    downloadEncodedImage();
   });
 }
 

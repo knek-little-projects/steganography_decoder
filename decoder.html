@@ -289,7 +289,12 @@
           </div>
 
           <div class="form-row form-actions">
-            <button id="encodeButton" type="button">Encode</button>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button id="encodeButton" type="button" style="background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 12px 30px rgba(59, 130, 246, 0.45);">Encode</button>
+              <button id="encodeDownloadButton" type="button" style="display: none; font-weight: 600; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 8px 18px; font-size: 15px; box-shadow: 0 12px 30px rgba(22, 163, 74, 0.45);">
+                Download
+              </button>
+            </div>
             <span id="encodeStatusLabel" class="status-label"></span>
           </div>
         </form>
@@ -297,9 +302,6 @@
         <section id="encodedPreviewSection" class="results-section" style="display: none;">
           <div class="results-header">
             <h3>Encoded image preview</h3>
-            <button id="downloadButton" type="button" class="secondary" style="display: none;">
-              Download
-            </button>
           </div>
           <div class="encoded-preview">
             <canvas id="encodedCanvas"></canvas>

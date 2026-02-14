@@ -804,6 +804,14 @@ button:disabled {
   background: #16a34a;
 }
 
+#encodeButton:hover {
+  box-shadow: 0 16px 36px rgba(59, 130, 246, 0.6);
+}
+
+#encodeButton:active {
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+}
+
 .button-secondary.decode-mode-btn {
   background: #6b7280;
   color: white;
