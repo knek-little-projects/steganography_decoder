@@ -10,45 +10,9 @@ import { textScore } from './autoDetectHeuristics.js';
 
 // Cache for loaded dictionaries
 const dictionaryCache = new Map();
-
-/**
- * Available dictionary languages
- */
-const DICTIONARY_LANGUAGES = ['english', 'german', 'russian', 'french', 'spanish'];
-
-/**
- * Loads a dictionary file for a given language.
- * 
- * @param {string} language - Language code (e.g., 'english', 'german')
- * @returns {Promise<Set<string>>} Set of words from the dictionary
- */
-async function loadDictionary(language) {
-  // Check cache first
-  if (dictionaryCache.has(language)) {
-    return dictionaryCache.get(language);
-  }
-
-  try {
-    const response = await fetch(`./dictionaries/${language}.txt`);
-    if (!response.ok) {
-      console.warn(`Failed to load dictionary for ${language}`);
-      return new Set();
-    }
-    
-    const text = await response.text();
-    const words = text
-      .split(/\W+/)
-      .map(line => line.trim().toLowerCase())
-      .filter(word => word.length > 0);
-    
-    const wordSet = new Set(words);
-    dictionaryCache.set(language, wordSet);
-    return wordSet;
-  } catch (error) {
-    console.warn(`Error loading dictionary for ${language}:`, error);
-    return new Set();
-  }
-}
+const TOP_WORDS_DICTIONARY_PATH = './dictionaries/top_words.json';
+const DICTIONARY_CACHE_KEY = 'top_words';
+let dictionaryLoadPromise = null;
 
 /**
  * Loads all available dictionaries.
@@ -56,16 +20,48 @@ async function loadDictionary(language) {
  * @returns {Promise<Map<string, Set<string>>>} Map of language to word set
  */
 async function loadAllDictionaries() {
-  const dictionaries = new Map();
-  
-  for (const language of DICTIONARY_LANGUAGES) {
-    const words = await loadDictionary(language);
-    if (words.size > 0) {
-      dictionaries.set(language, words);
-    }
+  if (dictionaryCache.has(DICTIONARY_CACHE_KEY)) {
+    return dictionaryCache.get(DICTIONARY_CACHE_KEY);
   }
-  
-  return dictionaries;
+
+  if (dictionaryLoadPromise) {
+    return dictionaryLoadPromise;
+  }
+
+  dictionaryLoadPromise = (async () => {
+    try {
+      const response = await fetch(TOP_WORDS_DICTIONARY_PATH);
+      if (!response.ok) {
+        console.warn(`Failed to load dictionary file ${TOP_WORDS_DICTIONARY_PATH}`);
+        return new Map();
+      }
+
+      const data = await response.json();
+      const dictionaries = new Map();
+
+      for (const [languageCode, words] of Object.entries(data || {})) {
+        if (!Array.isArray(words)) continue;
+
+        const wordSet = new Set(
+          words
+            .map(word => String(word).trim().toLowerCase())
+            .filter(word => word.length > 0)
+        );
+
+        if (wordSet.size > 0) {
+          dictionaries.set(languageCode, wordSet);
+        }
+      }
+
+      dictionaryCache.set(DICTIONARY_CACHE_KEY, dictionaries);
+      return dictionaries;
+    } catch (error) {
+      console.warn(`Error loading dictionary file ${TOP_WORDS_DICTIONARY_PATH}:`, error);
+      return new Map();
+    }
+  })();
+
+  return dictionaryLoadPromise;
 }
 
 /**
@@ -81,9 +77,7 @@ function checkTextAgainstDictionaries(text, dictionaries) {
   }
 
   // Extract words from text (case-insensitive, split by non-word characters)
-  const words = text
-    .toLowerCase()
-    .split(/\W+/)
+  const words = (text.toLowerCase().match(/[\p{L}\p{N}'-]+/gu) || [])
     .filter(word => word.length > 0);
 
   if (words.length === 0) {

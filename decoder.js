@@ -752,8 +752,10 @@ async function copyToClipboard(text) {
 
 function initTabs() {
   const tabButtons = document.querySelectorAll('.tab-button');
+  const appMain = document.querySelector('.app-main');
   const decodePanel = document.getElementById('decodePanel');
   const encodePanel = document.getElementById('encodePanel');
+  const morePanel = document.getElementById('morePanel');
 
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -765,9 +767,18 @@ function initTabs() {
       if (tab === 'decode') {
         decodePanel.style.display = 'flex';
         encodePanel.style.display = 'none';
-      } else {
+        morePanel.style.display = 'none';
+        if (appMain) appMain.classList.remove('more-only');
+      } else if (tab === 'encode') {
         decodePanel.style.display = 'none';
         encodePanel.style.display = 'flex';
+        morePanel.style.display = 'none';
+        if (appMain) appMain.classList.remove('more-only');
+      } else {
+        decodePanel.style.display = 'none';
+        encodePanel.style.display = 'none';
+        morePanel.style.display = 'flex';
+        if (appMain) appMain.classList.add('more-only');
       }
     });
   });

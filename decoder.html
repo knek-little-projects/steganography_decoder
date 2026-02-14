@@ -2,19 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>LSB Image Steganography</title>
+    <title>Steganography Decoder & Encoder</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="decoder.css" />
   </head>
   <body>
     <header class="app-header">
       <div class="app-header-title">
-        <h1>LSB Image Steganography</h1>
+        <h1>Steganography Decoder & Encoder</h1>
         <p>Encode and decode hidden messages in images using LSB steganography.</p>
       </div>
       <nav class="tabs">
         <button class="tab-button active" data-tab="decode">Decode</button>
         <button class="tab-button" data-tab="encode">Encode</button>
+        <button class="tab-button" data-tab="more">Feedback</button>
       </nav>
     </header>
 
@@ -304,6 +305,27 @@
             <canvas id="encodedCanvas"></canvas>
           </div>
         </section>
+      </section>
+
+      <section class="panel panel-right" id="morePanel" style="display: none;">
+        <h2>More Features</h2>
+        <div class="more-features-content">
+          <pre class="ascii-art">
+ _____ _____ _     _        _   _ ____       _    _   _ __   __ _____ _   _ ___ _   _  ____
+|_   _| ____| |   | |      | | | / ___|     / \  | \ | |\ \ / /|_   _| | | |_ _| \ | |/ ___|
+  | | |  _| | |   | |      | | | \___ \    / _ \ |  \| | \ V /   | | | |_| || ||  \| | |  _
+  | | | |___| |___| |___   | |_| |___) |  / ___ \| |\  |  | |    | | |  _  || || |\  | |_| |
+  |_| |_____|_____|_____|   \___/|____/  /_/   \_\_| \_|  |_|    |_| |_| |_|___|_| \_|\____|
+          </pre>
+          <a
+            class="ask-button"
+            href="https://forms.gle/2KnvLNKiq1zYNhFP7"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            TELL
+          </a>
+        </div>
       </section>
     </main>
 

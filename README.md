@@ -1,4 +1,4 @@
-# LSB Image Steganography Chrome Extension
+# Steganography Decoder & Encoder Chrome Extension
 
 Chrome extension (Manifest V3) for encoding and decoding hidden messages in images using LSB (Least Significant Bit) steganography.
 
@@ -87,6 +87,13 @@ When adding features:
 1. Add core functionality to `lsb.js`
 2. Add tests to `lsb.test.js`
 3. Update UI in `decoder.js` or `encoder.js` as needed
+
+## How to download word lists
+
+```python
+!pip install wordfreq
+>>> import json; from wordfreq import top_n_list; json.dump({k: top_n_list(k, 20000) for k in ["en","ru","de","fr","es","pt"]}, open("top_words.json","w",encoding="utf-8"), ensure_ascii=False)
+```
 
 ## License
 
