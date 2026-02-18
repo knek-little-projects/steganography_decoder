@@ -208,7 +208,7 @@
 
           <div class="form-row">
             <select id="encodeMethod" class="encode-method-select">
-              <option value="jpeg-dct">JPEG DCT (for posting in Twitter, Tumblr, etc.)</option>
+              <option value="jpeg-dct">JPEG DCT (for posting in Twitter, Tumblr, Telegram, etc.)</option>
               <option value="lossless-lsb">LOSSLESS LSB (for PNG images with no compression)</option>
             </select>
           </div>
@@ -220,79 +220,104 @@
           </div>
 
           <div id="encoderOptions" class="encoder-options" style="display: none;">
-            <div class="form-row">
-              <label for="encodeBitsPerChannel">Bits per channel</label>
-              <input
-                id="encodeBitsPerChannel"
-                type="number"
-                min="1"
-                max="8"
-                step="1"
-                value="1"
-              />
-            </div>
+            <!-- JPEG DCT options -->
+            <div id="jpegDctOptions" class="method-options">
+              <div class="form-row form-row-slider">
+                <label for="dctRobustness">Robustness <span class="slider-value" id="dctRobustnessValue">50</span></label>
+                <input id="dctRobustness" type="range" min="20" max="100" step="5" value="50" class="slider" />
+                <span class="slider-hint">← subtle &nbsp; robust →</span>
+              </div>
 
-            <div class="form-row">
-              <span class="label">Channels</span>
-              <div class="checkbox-group">
+              <div class="form-row form-row-slider">
+                <label for="dctJpegQuality">JPEG quality <span class="slider-value" id="dctJpegQualityValue">95</span></label>
+                <input id="dctJpegQuality" type="range" min="50" max="100" step="1" value="95" class="slider" />
+                <span class="slider-hint">← smaller &nbsp; lossless →</span>
+              </div>
+
+              <div class="form-row">
                 <label>
-                  <input id="encodeChannelR" type="checkbox" checked />
-                  R
-                </label>
-                <label>
-                  <input id="encodeChannelG" type="checkbox" checked />
-                  G
-                </label>
-                <label>
-                  <input id="encodeChannelB" type="checkbox" checked />
-                  B
+                  <input id="dctFillWithZeros" type="checkbox" />
+                  Fill remaining blocks with zeros
                 </label>
               </div>
             </div>
 
-            <div class="form-row">
-              <span class="label">Pixel order</span>
-              <div class="radio-group">
+            <!-- LSB options -->
+            <div id="lsbOptionsWrapper">
+              <div class="form-row">
+                <label for="encodeBitsPerChannel">Bits per channel</label>
+                <input
+                  id="encodeBitsPerChannel"
+                  type="number"
+                  min="1"
+                  max="8"
+                  step="1"
+                  value="1"
+                />
+              </div>
+
+              <div class="form-row">
+                <span class="label">Channels</span>
+                <div class="checkbox-group">
+                  <label>
+                    <input id="encodeChannelR" type="checkbox" checked />
+                    R
+                  </label>
+                  <label>
+                    <input id="encodeChannelG" type="checkbox" checked />
+                    G
+                  </label>
+                  <label>
+                    <input id="encodeChannelB" type="checkbox" checked />
+                    B
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <span class="label">Pixel order</span>
+                <div class="radio-group">
+                  <label>
+                    <input
+                      type="radio"
+                      name="encodePixelOrder"
+                      value="row"
+                      checked
+                    />
+                    Left to right (rows)
+                  </label>
+                  <label>
+                    <input type="radio" name="encodePixelOrder" value="column" />
+                    Top to bottom (columns)
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <span class="label">Encoding</span>
+                <div class="radio-group">
+                  <label>
+                    <input
+                      type="radio"
+                      name="encodeEncoding"
+                      value="utf8"
+                      checked
+                    />
+                    UTF-8
+                  </label>
+                  <label>
+                    <input type="radio" name="encodeEncoding" value="ascii" />
+                    ASCII
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-row">
                 <label>
-                  <input
-                    type="radio"
-                    name="encodePixelOrder"
-                    value="row"
-                    checked
-                  />
-                  Left to right (rows)
-                </label>
-                <label>
-                  <input type="radio" name="encodePixelOrder" value="column" />
-                  Top to bottom (columns)
+                  <input id="fillWithZeros" type="checkbox" checked />
+                  Fill remaining capacity with zeros
                 </label>
               </div>
-            </div>
-
-            <div class="form-row">
-              <span class="label">Encoding</span>
-              <div class="radio-group">
-                <label>
-                  <input
-                    type="radio"
-                    name="encodeEncoding"
-                    value="utf8"
-                    checked
-                  />
-                  UTF-8
-                </label>
-                <label>
-                  <input type="radio" name="encodeEncoding" value="ascii" />
-                  ASCII
-                </label>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <label>
-                <input id="fillWithZeros" type="checkbox" checked />
-                Fill remaining capacity with zeros
-              </label>
             </div>
           </div>
 

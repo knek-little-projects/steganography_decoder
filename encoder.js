@@ -3,6 +3,7 @@ import { jpegEncode as jpegEncodeCore } from './stegojpeg.js';
 
 let currentImageDataForEncode = null;
 let currentEncodeMethod = 'jpeg-dct'; // Track current method for download
+let currentJpegQuality = 0.95; // Track JPEG quality for download
 
 const messageInput = document.getElementById('messageInput');
 const charCount = document.getElementById('charCount');
@@ -17,6 +18,18 @@ const toggleEncoderOptionsBtn = document.getElementById('toggleEncoderOptions');
 const encoderOptions = document.getElementById('encoderOptions');
 const encodeMethodSelect = document.getElementById('encodeMethod');
 
+// JPEG DCT controls
+const jpegDctOptionsEl = document.getElementById('jpegDctOptions');
+const dctRobustnessInput = document.getElementById('dctRobustness');
+const dctRobustnessValue = document.getElementById('dctRobustnessValue');
+const dctJpegQualityInput = document.getElementById('dctJpegQuality');
+const dctJpegQualityValue = document.getElementById('dctJpegQualityValue');
+const dctFillWithZerosInput = document.getElementById('dctFillWithZeros');
+
+// LSB wrapper
+const lsbOptionsWrapper = document.getElementById('lsbOptionsWrapper');
+
+// LSB controls
 const encodeBitsPerChannelInput = document.getElementById('encodeBitsPerChannel');
 const encodeChannelRInput = document.getElementById('encodeChannelR');
 const encodeChannelGInput = document.getElementById('encodeChannelG');
@@ -50,7 +63,7 @@ function downloadEncodedImage() {
   }
 
   if (currentEncodeMethod === 'jpeg-dct') {
-    // Save as JPEG with high quality (to preserve DCT-embedded data)
+    const quality = currentJpegQuality;
     encodedCanvas.toBlob((blob) => {
       if (!blob) return;
       const url = URL.createObjectURL(blob);
@@ -59,9 +72,8 @@ function downloadEncodedImage() {
       a.download = 'encoded-image.jpg';
       a.click();
       URL.revokeObjectURL(url);
-    }, 'image/jpeg', 0.95);
+    }, 'image/jpeg', quality);
   } else {
-    // Save as PNG (lossless)
     encodedCanvas.toBlob((blob) => {
       if (!blob) return;
       const url = URL.createObjectURL(blob);
@@ -77,7 +89,6 @@ function downloadEncodedImage() {
 export function setImageForEncode(imageData) {
   currentImageDataForEncode = imageData;
   updateCapacity();
-  // Hide download button when new image is loaded
   if (encodeDownloadButton) {
     encodeDownloadButton.style.display = 'none';
   }
@@ -92,7 +103,6 @@ function updateCapacity() {
   const method = getSelectedEncodeMethod();
 
   if (method === 'jpeg-dct') {
-    // JPEG DCT: 1 bit per 8×8 block, minus 32-bit header
     const blocksX = Math.floor(currentImageDataForEncode.width / 8);
     const blocksY = Math.floor(currentImageDataForEncode.height / 8);
     const totalBlocks = blocksX * blocksY;
@@ -129,23 +139,38 @@ function updateCapacity() {
 }
 
 /**
- * Show/hide LSB-specific options based on encoding method.
- * JPEG DCT doesn't use bits-per-channel, channels, pixel order, etc.
+ * Show/hide method-specific options based on encoding method selection.
+ * Both option sets live inside the shared collapsible #encoderOptions panel.
  */
 function updateMethodUI() {
   const method = getSelectedEncodeMethod();
   const isLSB = method === 'lossless-lsb';
 
-  // Show/hide the toggle button for LSB options
-  if (toggleEncoderOptionsBtn) {
-    toggleEncoderOptionsBtn.style.display = isLSB ? '' : 'none';
+  // Toggle JPEG DCT options inside the shared panel
+  if (jpegDctOptionsEl) {
+    jpegDctOptionsEl.style.display = isLSB ? 'none' : '';
   }
-  // Hide LSB options panel when switching to JPEG DCT
-  if (!isLSB && encoderOptions) {
-    encoderOptions.style.display = 'none';
+
+  // Toggle LSB options inside the shared panel
+  if (lsbOptionsWrapper) {
+    lsbOptionsWrapper.style.display = isLSB ? '' : 'none';
   }
 
   updateCapacity();
+}
+
+/* ---- Slider live-value updates ---- */
+
+if (dctRobustnessInput && dctRobustnessValue) {
+  dctRobustnessInput.addEventListener('input', () => {
+    dctRobustnessValue.textContent = dctRobustnessInput.value;
+  });
+}
+
+if (dctJpegQualityInput && dctJpegQualityValue) {
+  dctJpegQualityInput.addEventListener('input', () => {
+    dctJpegQualityValue.textContent = dctJpegQualityInput.value;
+  });
 }
 
 if (messageInput) {
@@ -183,7 +208,16 @@ if (encodeButton) {
     let encodedImageData;
 
     if (method === 'jpeg-dct') {
-      encodedImageData = jpegEncodeCore(currentImageDataForEncode, message);
+      const step = dctRobustnessInput ? parseInt(dctRobustnessInput.value, 10) : 50;
+      const fillZeros = dctFillWithZerosInput ? dctFillWithZerosInput.checked : false;
+      currentJpegQuality = dctJpegQualityInput
+        ? parseInt(dctJpegQualityInput.value, 10) / 100
+        : 0.95;
+
+      encodedImageData = jpegEncodeCore(currentImageDataForEncode, message, {
+        step,
+        fillWithZeros: fillZeros,
+      });
     } else {
       const config = {
         bitsPerChannel: parseInt(encodeBitsPerChannelInput.value, 10) || 1,
@@ -207,7 +241,6 @@ if (encodeButton) {
     const ctx = encodedCanvas.getContext('2d');
     ctx.putImageData(encodedImageData, 0, 0);
 
-    // Show encoded preview section
     if (encodedPreviewSection) {
       encodedPreviewSection.style.display = 'flex';
     }

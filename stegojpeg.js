@@ -144,6 +144,7 @@ export function jpegEncode(imageData, message, options = {}) {
     step = 50,
     embedU = DEFAULT_EMBED_U,
     embedV = DEFAULT_EMBED_V,
+    fillWithZeros = false,
   } = options;
 
   const { width, height } = imageData;
@@ -178,6 +179,11 @@ export function jpegEncode(imageData, message, options = {}) {
       `Message too long for this image. Need ${bits.length} blocks but only ` +
       `${totalBlocks} available (${bx_count}×${by_count}).`
     );
+  }
+
+  // Pad remaining blocks with zero-bits so unused blocks don't leak original DCT values
+  if (fillWithZeros) {
+    while (bits.length < totalBlocks) bits.push(0);
   }
 
   /* ---------- embed ---------- */
