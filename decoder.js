@@ -1,6 +1,7 @@
 import { setImageForEncode } from './encoder.js';
 
 import { decodeLSB, formatBytesAsAscii, formatBytesAsUtf8, formatBytesAsHex } from './lsb.js';
+import { jpegDecode } from './stegojpeg.js';
 import { autoDetectParametersByMaxLength } from './autoDetect.js';
 
 const fileInput = document.getElementById('fileInput');
@@ -309,20 +310,32 @@ function applyCandidate(candidate) {
   // Decode again with full data (not just preview)
   try {
     setStatus('Decoding with selected parameters...', false);
-    
-    const result = decodeLSB(currentImageData, {
-      bitsPerChannel,
-      useR,
-      useG,
-      useB,
-      order,
-    });
 
-    // Format bytes for display based on encoding
-    const formattedText = encoding === 'ascii'
-      ? formatBytesAsAscii(result.bytes, result.hasTail, result.tailBits || 0)
-      : formatBytesAsUtf8(result.bytes, result.hasTail, result.tailBits || 0);
-    const formattedHex = formatBytesAsHex(result.bytes);
+    let formattedText, formattedHex, byteCount;
+
+    if (candidate._isJpegDct) {
+      // JPEG DCT candidate — re-decode with jpegDecode
+      const dctResult = jpegDecode(currentImageData);
+      formattedText = dctResult.message;
+      const msgBytes = new TextEncoder().encode(dctResult.message);
+      formattedHex = formatBytesAsHex(msgBytes);
+      byteCount = msgBytes.length;
+    } else {
+      const result = decodeLSB(currentImageData, {
+        bitsPerChannel,
+        useR,
+        useG,
+        useB,
+        order,
+      });
+
+      // Format bytes for display based on encoding
+      formattedText = encoding === 'ascii'
+        ? formatBytesAsAscii(result.bytes, result.hasTail, result.tailBits || 0)
+        : formatBytesAsUtf8(result.bytes, result.hasTail, result.tailBits || 0);
+      formattedHex = formatBytesAsHex(result.bytes);
+      byteCount = result.byteCount;
+    }
 
     // Store full text and hex
     fullDecodedText = formattedText;
@@ -337,8 +350,9 @@ function applyCandidate(candidate) {
     }
     
     // Display only first DISPLAY_BYTE_LIMIT bytes in hex with "show more" link
-    if (result.bytes.length > DISPLAY_BYTE_LIMIT) {
-      const truncatedBytes = result.bytes.slice(0, DISPLAY_BYTE_LIMIT);
+    const hexBytes = new TextEncoder().encode(formattedText);
+    if (hexBytes.length > DISPLAY_BYTE_LIMIT) {
+      const truncatedBytes = hexBytes.slice(0, DISPLAY_BYTE_LIMIT);
       const truncatedHex = formatBytesAsHex(truncatedBytes);
       hexOutput.innerHTML = escapeHtml(truncatedHex) + ' <a href="#" class="show-more-link">[show more...]</a>';
     } else {
@@ -350,14 +364,18 @@ function applyCandidate(candidate) {
     decodedTextSection.style.display = 'flex';
     hexViewSection.style.display = 'flex';
     
-    const summary = [
-      `${bitsPerChannel} bit(s)/channel`,
-      `${useR ? 'R' : ''}${useG ? 'G' : ''}${useB ? 'B' : ''}`,
-      `order: ${order}`,
-      `encoding: ${encoding.toUpperCase()}`,
-      `${result.byteCount} bytes`,
-    ];
-    setStatus(summary.join(' · '), false);
+    if (candidate._isJpegDct) {
+      setStatus(`JPEG DCT · ${byteCount} bytes`, false);
+    } else {
+      const summary = [
+        `${bitsPerChannel} bit(s)/channel`,
+        `${useR ? 'R' : ''}${useG ? 'G' : ''}${useB ? 'B' : ''}`,
+        `order: ${order}`,
+        `encoding: ${encoding.toUpperCase()}`,
+        `${byteCount} bytes`,
+      ];
+      setStatus(summary.join(' · '), false);
+    }
   } catch (e) {
     console.error('Decode error', e);
     setStatus('Failed to decode with selected parameters. See console for details.', true);
@@ -400,7 +418,11 @@ function displayCandidates(candidates) {
     const preview = formattedText.replace(/\n/g, ' ').substring(0, 100);
     const previewText = preview + (previewBytes.length >= 100 ? '...' : '');
     
-    const channels = `${candidate.params.useR ? 'R' : ''}${candidate.params.useG ? 'G' : ''}${candidate.params.useB ? 'B' : ''}`;
+    const isJpegDct = candidate._isJpegDct;
+    const channels = isJpegDct ? '' : `${candidate.params.useR ? 'R' : ''}${candidate.params.useG ? 'G' : ''}${candidate.params.useB ? 'B' : ''}`;
+    const paramsLabel = isJpegDct
+      ? 'JPEG DCT'
+      : `${candidate.params.bitsPerChannel}bit/${channels} ${candidate.params.order} ${candidate.params.encoding.toUpperCase()}`;
     
     // Medal emoji for top-3
     const medal = index === 0 ? '🏆' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
@@ -410,7 +432,7 @@ function displayCandidates(candidates) {
       <div class="candidate-header">
         <span class="candidate-rank">${medal} #${index + 1}</span>
         ${bestBadge}
-        <span class="candidate-params">${candidate.params.bitsPerChannel}bit/${channels} ${candidate.params.order} ${candidate.params.encoding.toUpperCase()}</span>
+        <span class="candidate-params">${paramsLabel}</span>
         <div class="candidate-scores">
           ${textScore > 0 ? `<span class="score-badge score-text">Text: ${(textScore * 100).toFixed(0)}%</span>` : ''}
           ${dictionaryScore > 0 ? `<span class="score-badge score-dict">${detectedLanguage || 'dict'}: ${(dictionaryScore * 100).toFixed(0)}%</span>` : ''}
@@ -542,6 +564,31 @@ async function handleAutoDetectClick() {
   // Create AbortController for cancellation
   autoDetectAbortController = new AbortController();
 
+  // Pre-compute JPEG DCT candidate (fast) to prepend to real-time updates
+  let jpegDctCandidate = null;
+  try {
+    const dctResult = jpegDecode(currentImageData);
+    if (dctResult.valid && dctResult.message.length > 0) {
+      jpegDctCandidate = {
+        params: {
+          bitsPerChannel: '-',
+          useR: false, useG: false, useB: false,
+          order: 'dct',
+          encoding: 'utf8',
+        },
+        result: {
+          text: dctResult.message,
+          bytes: new TextEncoder().encode(dctResult.message),
+        },
+        textScoreResult: { score: 1 },
+        dictionaryScore: 0,
+        detectedLanguage: null,
+        _isJpegDct: true,
+      };
+      displayCandidates([jpegDctCandidate]);
+    }
+  } catch (_) { /* JPEG DCT not present — that's fine */ }
+
   try {
     const t0 = performance.now();
     const detection = await autoDetectParametersByMaxLength(currentImageData, {
@@ -563,11 +610,14 @@ async function handleAutoDetectClick() {
         }
       },
       onCandidate: (sortedCandidates) => {
-        // Update candidates list in real-time
+        // Update candidates list in real-time, prepend JPEG DCT if valid
         if (autoDetectAbortController && autoDetectAbortController.signal.aborted) {
           return;
         }
-        displayCandidates(sortedCandidates);
+        const merged = jpegDctCandidate
+          ? [jpegDctCandidate, ...sortedCandidates]
+          : sortedCandidates;
+        displayCandidates(merged);
       },
       abortSignal: autoDetectAbortController.signal,
     });
@@ -593,8 +643,12 @@ async function handleAutoDetectClick() {
       return;
     }
 
-    // Final update of candidates list (in case onCandidate wasn't called for all)
-    displayCandidates(detection.candidates);
+    // Merge JPEG DCT candidate (if found earlier) with LSB candidates
+    const finalCandidates = jpegDctCandidate
+      ? [jpegDctCandidate, ...(detection.candidates || [])]
+      : (detection.candidates || []);
+
+    displayCandidates(finalCandidates);
     
     setStatus(`Found ${detection.candidates.length} candidate(s) in ~${(t1 - t0).toFixed(0)}ms. Select one to view details.`, false);
   } catch (e) {

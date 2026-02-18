@@ -329,6 +329,32 @@ body {
   flex-shrink: 0;
 }
 
+.encode-method-select {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(55, 65, 81, 0.9);
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 5.5l6.5 6 6.5-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.encode-method-select:focus {
+  outline: 1px solid var(--accent);
+  border-color: var(--accent);
+}
+
+.encode-method-select option {
+  background: #0f172a;
+  color: var(--text);
+}
+
 .form-row input[type="number"]:focus {
   outline: 1px solid var(--accent);
   border-color: var(--accent);
