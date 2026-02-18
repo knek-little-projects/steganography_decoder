@@ -223,6 +223,12 @@
             <!-- JPEG DCT options -->
             <div id="jpegDctOptions" class="method-options">
               <div class="form-row form-row-slider">
+                <label for="dctMaxDimension">Max dimension <span class="slider-value" id="dctMaxDimensionValue">1280</span>px</label>
+                <input id="dctMaxDimension" type="range" min="256" max="4096" step="64" value="1280" class="slider" />
+                <span class="slider-hint">← smaller &nbsp; original →</span>
+              </div>
+
+              <div class="form-row form-row-slider">
                 <label for="dctRobustness">Robustness <span class="slider-value" id="dctRobustnessValue">50</span></label>
                 <input id="dctRobustness" type="range" min="20" max="100" step="5" value="50" class="slider" />
                 <span class="slider-hint">← subtle &nbsp; robust →</span>

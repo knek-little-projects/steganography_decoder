@@ -2,6 +2,7 @@ import { encodeLSB as encodeLSBCore } from './lsb.js';
 import { jpegEncode as jpegEncodeCore } from './stegojpeg.js';
 
 let currentImageDataForEncode = null;
+let originalImageDataForEncode = null; // Unresized original
 let currentEncodeMethod = 'jpeg-dct'; // Track current method for download
 let currentJpegQuality = 0.95; // Track JPEG quality for download
 
@@ -25,6 +26,8 @@ const dctRobustnessValue = document.getElementById('dctRobustnessValue');
 const dctJpegQualityInput = document.getElementById('dctJpegQuality');
 const dctJpegQualityValue = document.getElementById('dctJpegQualityValue');
 const dctFillWithZerosInput = document.getElementById('dctFillWithZeros');
+const dctMaxDimensionInput = document.getElementById('dctMaxDimension');
+const dctMaxDimensionValue = document.getElementById('dctMaxDimensionValue');
 
 // LSB wrapper
 const lsbOptionsWrapper = document.getElementById('lsbOptionsWrapper');
@@ -86,9 +89,48 @@ function downloadEncodedImage() {
   }
 }
 
-export function setImageForEncode(imageData) {
-  currentImageDataForEncode = imageData;
+/**
+ * Proportionally resize ImageData so that the largest dimension
+ * does not exceed maxDim. Returns the original if already within bounds.
+ */
+function resizeImageData(imageData, maxDim) {
+  const { width, height } = imageData;
+  if (width <= maxDim && height <= maxDim) return imageData;
+
+  let newW, newH;
+  if (width >= height) {
+    newW = maxDim;
+    newH = Math.round(height * (maxDim / width));
+  } else {
+    newH = maxDim;
+    newW = Math.round(width * (maxDim / height));
+  }
+
+  const srcCanvas = document.createElement('canvas');
+  srcCanvas.width = width;
+  srcCanvas.height = height;
+  const srcCtx = srcCanvas.getContext('2d');
+  srcCtx.putImageData(imageData, 0, 0);
+
+  const dstCanvas = document.createElement('canvas');
+  dstCanvas.width = newW;
+  dstCanvas.height = newH;
+  const dstCtx = dstCanvas.getContext('2d');
+  dstCtx.drawImage(srcCanvas, 0, 0, newW, newH);
+
+  return dstCtx.getImageData(0, 0, newW, newH);
+}
+
+function applyResizeToCurrentImage() {
+  if (!originalImageDataForEncode) return;
+  const maxDim = dctMaxDimensionInput ? parseInt(dctMaxDimensionInput.value, 10) : 1280;
+  currentImageDataForEncode = resizeImageData(originalImageDataForEncode, maxDim);
   updateCapacity();
+}
+
+export function setImageForEncode(imageData) {
+  originalImageDataForEncode = imageData;
+  applyResizeToCurrentImage();
   if (encodeDownloadButton) {
     encodeDownloadButton.style.display = 'none';
   }
@@ -160,6 +202,13 @@ function updateMethodUI() {
 }
 
 /* ---- Slider live-value updates ---- */
+
+if (dctMaxDimensionInput && dctMaxDimensionValue) {
+  dctMaxDimensionInput.addEventListener('input', () => {
+    dctMaxDimensionValue.textContent = dctMaxDimensionInput.value;
+    applyResizeToCurrentImage();
+  });
+}
 
 if (dctRobustnessInput && dctRobustnessValue) {
   dctRobustnessInput.addEventListener('input', () => {
